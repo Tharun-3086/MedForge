@@ -1,0 +1,26 @@
+# Niyamit Care Bridge: backend dependencies (Python 3.12+, verified on 3.13).
+# Verified with: fastapi 0.162, starlette 1.6, sqlalchemy 2.1.6, alembic 1.20.1, psycopg 3.3.6,
+# celery 5.6.3, redis-py 8.1, pydantic 2.13, pypdf 5.9, pdfplumber 0.11.10, pypdfium2 5.13, pillow 12.3.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.7,<3
+pydantic-settings>=2.4,<3
+python-multipart>=0.0.9
+sqlalchemy>=2.0.30,<2.2
+alembic>=1.13,<2
+psycopg[binary]>=3.2,<4
+celery[redis]>=5.4,<6
+redis>=5.0,<9
+httpx>=0.27,<1.0
+PyJWT>=2.8,<3
+cryptography>=42
+python-dateutil>=2.9
+pillow>=10.4
+pypdf>=4.3,<7
+pdfplumber>=0.11,<1.0
+pypdfium2>=4.30,<6
+openpyxl>=3.1,<4
+pytesseract>=0.3.10
+
+# tests:  pytest -q
+pytest>=8.0

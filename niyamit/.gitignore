@@ -1,0 +1,17 @@
+# secrets
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# local data and caches
+.venv/
+backend/data/
+celerybeat-schedule*
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# web build output
+node_modules/
+.next/
+*.tsbuildinfo

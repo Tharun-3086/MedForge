@@ -1,0 +1,10 @@
+{
+  "name": "Niyamit Care Bridge",
+  "short_name": "Niyamit",
+  "description": "Your diabetes follow-ups, in your language.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2F5F7",
+  "theme_color": "#0F2A44",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
