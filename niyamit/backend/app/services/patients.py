@@ -42,7 +42,7 @@ def create_patient(db: Session, staff: Staff, clinic: Clinic, *, name: str, phon
         raise HTTPException(409, "A patient with this mobile number already exists in this clinic.")
     p = Patient(clinic_id=clinic.id, display_name=name.strip()[:120], phone_e164=phone_e164, birth_year=birth_year,
                 preferred_language=language, preferred_channel=channel, external_ref=external_ref.strip()[:60],
-                is_synthetic=True)
+                is_synthetic=clinic.is_synthetic)
     db.add(p)
     db.flush()
     audit(db, clinic_id=clinic.id, action="PATIENT_CREATED", actor=staff, object_type="patient", object_id=p.id,

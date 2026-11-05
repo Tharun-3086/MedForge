@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
@@ -53,6 +54,8 @@ export default function PatientApp() {
     field?.focus({ preventScroll: true });
     setFocusMessage(false);
   }, [focusMessage, view]);
+
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [view]);
 
   const loadHome = useCallback(async () => {
     const h = await api<Home>("/v1/p/home");
@@ -123,7 +126,7 @@ export default function PatientApp() {
       setReply(r);
       setView("result");
       setText("");
-      void loadHome();
+      void loadHome().catch(() => setProblem(t(lang, "refreshHomeFailed")));
     } catch (err) {
       setProblem(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -186,6 +189,8 @@ export default function PatientApp() {
     <main className="pt">
       <div className="pt-wrap">
         {top}
+        <Link href="/" className="pt-link">{lang === "hi" ? "ऐप चुनें: मरीज़ या क्लिनिक" : lang === "te" ? "యాప్ ఎంచుకోండి: రోగి లేదా క్లినిక్" : "Switch Patient / Clinic"}</Link>
+        {problem ? <p role="alert" className="notice notice--fail">{problem}</p> : null}
         {view === "home" ? (
           <>
             <h1>{t(lang, "hello", { name: home.patient.first_name })}</h1>
@@ -255,7 +260,6 @@ export default function PatientApp() {
               <VoiceRecorder lang={lang} available={home.voice_available} consented={home.consents.AI_PROCESSING === "GRANTED"}
                 onConsent={async () => { await api("/v1/p/consents", { body: { purpose: "AI_PROCESSING", granted: true } }); await loadHome(); }}
                 onSent={(r) => { setReply(r); setView("result"); }} />
-              {problem ? <p className="notice notice--fail">{problem}</p> : null}
             </section>
 
             <div className="pt-foot">

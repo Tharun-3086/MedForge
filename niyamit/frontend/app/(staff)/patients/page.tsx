@@ -8,19 +8,21 @@ import { PageHead } from "@/components/staff-shell";
 import { Empty, ErrorNote, Loading, Modal, Pill, useAction } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { fmtShortDate, LANGUAGE_NAME } from "@/lib/format";
+import { useStaff } from "@/lib/staff-context";
 import type { Item, PatientBrief } from "@/lib/types";
 
 type Row = PatientBrief & { next_item: Item | null; open_tasks: number };
 
 export default function PatientsPage() {
   const router = useRouter();
+  const { me } = useStaff();
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
   const { data, error, loading } = useApi<{ patients: Row[] }>(`/v1/patients?q=${encodeURIComponent(query)}`);
   const { busy, run } = useAction();
   const [form, setForm] = useState({ display_name: "", phone: "", birth_year: "", preferred_language: "te",
-    preferred_channel: "SIMULATED", external_ref: "", consent_reminders: true, consent_ai: false });
+    preferred_channel: "SIMULATED", external_ref: "", consent_reminders: false, consent_ai: false });
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -32,7 +34,7 @@ export default function PatientsPage() {
 
   return (
     <>
-      <PageHead title="Patients" lede="Synthetic demo records. Search by name, mobile number or clinic number."
+      <PageHead title="Patients" lede={me.clinic.is_synthetic ? "Synthetic demo records. Search by name, mobile number or clinic number." : "Search clinic patients by name, mobile number or clinic number."}
         actions={<button className="btn" onClick={() => setAdding(true)}>Add patient</button>} />
       <form className="row" style={{ marginBottom: 14, maxWidth: 520 }} onSubmit={(e) => { e.preventDefault(); setQuery(q); }}>
         <input type="search" placeholder="Name, mobile or clinic number" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search patients" className="grow" style={{ width: "auto", flex: 1 }} />
@@ -76,7 +78,7 @@ export default function PatientsPage() {
           <button className="btn" form="add-patient" type="submit" disabled={busy}>Add patient</button>
         </>}>
         <form id="add-patient" className="stack" onSubmit={create}>
-          <p className="notice notice--warn small">Use made-up details only. This demo must never hold a real patient&rsquo;s data.</p>
+          {me.clinic.is_synthetic ? <p className="notice notice--warn small">Use made-up details only. This demo must never hold a real patient&rsquo;s data.</p> : <p className="small">Confirm patient identity and record consent only after the patient agrees.</p>}
           <div className="form-grid">
             <label className="field"><span>Name</span>
               <input type="text" required value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api, ApiError, clientKey, usePoll } from "@/lib/api";
 import { fmtDate, fmtLongDay, fmtTime } from "@/lib/format";
@@ -24,6 +24,11 @@ export function ReplyResult({ lang, reply, onReply, onChanged, onUpload, tts, cl
   const [fix, setFix] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const player = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
+  useEffect(() => { setAudioUrl(null); }, [reply.id]);
 
   usePoll(reply.processing, async () => {
     const fresh = await api<ReplyView>(`/v1/p/replies/${reply.id}`).catch(() => null);
@@ -65,8 +70,13 @@ export function ReplyResult({ lang, reply, onReply, onChanged, onUpload, tts, cl
   }
 
   async function listen(i: number) {
+    if (audioLoading) return;
+    player.current?.pause();
+    setAudioUrl(null);
+    setAudioLoading(true);
     const blob = await call(() => api<Blob>(`/v1/p/replies/${reply.id}/audio?i=${i}`));
-    if (blob) void new Audio(URL.createObjectURL(blob)).play();
+    if (blob) setAudioUrl(URL.createObjectURL(blob));
+    setAudioLoading(false);
   }
 
   const words = reply.corrected_text || reply.transcript || reply.text;
@@ -89,7 +99,7 @@ export function ReplyResult({ lang, reply, onReply, onChanged, onUpload, tts, cl
         <div className="stack">
           <h2>{t(lang, "understood")}</h2>
           {reply.actions.map((a, i) => (
-            <ActionBlock key={i} lang={lang} action={a} index={i} busy={busy} tts={tts} clinicPhone={clinicPhone}
+            <ActionBlock key={i} lang={lang} action={a} index={i} busy={busy || audioLoading} tts={tts} clinicPhone={clinicPhone}
               onButton={button} onListen={listen} onUpload={onUpload}
               onOptOut={async (confirm) => {
                 const r = await call(() => api<ReplyView>(`/v1/p/replies/${reply.id}/opt-out`, { body: { confirm } }));
@@ -103,7 +113,13 @@ export function ReplyResult({ lang, reply, onReply, onChanged, onUpload, tts, cl
         </div>
       ) : null}
 
-      {problem ? <p className="notice notice--fail">{problem}</p> : null}
+      {audioLoading ? <p role="status">{t(lang, "preparingAudio")}</p> : null}
+      {audioUrl ? <div className="stack"><p className="small">{t(lang, "audioReady")}</p>
+        <audio ref={player} controls src={audioUrl} style={{ width: "100%" }}
+          onCanPlay={() => { void player.current?.play().catch(() => undefined); }}
+          onError={() => setProblem(t(lang, "audioFailed"))} />
+      </div> : null}
+      {problem ? <p role="alert" className="notice notice--fail">{problem}</p> : null}
 
       {reply.can_correct && !reply.processing ? (
         correcting ? (
@@ -194,7 +210,7 @@ function ActionBlock({ lang, action: a, index, busy, tts, clinicPhone, onButton,
       ) : null}
       {a.status === "AWAITING_UPLOAD" ? <button className="btn btn--quiet" onClick={onUpload}>{t(lang, "shareReport")}</button> : null}
       {tts && (a.patient_text || question) ? (
-        <button className="pt-link" onClick={() => onListen(index)}>{t(lang, "listen")}</button>
+        <button className="pt-link" disabled={busy} onClick={() => onListen(index)}>{t(lang, "listen")}</button>
       ) : null}
     </div>
   );

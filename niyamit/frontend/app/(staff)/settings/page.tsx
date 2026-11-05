@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { StaffAccess } from "@/components/staff-access";
 import { templateName } from "@/components/outcomes";
 import { PageHead } from "@/components/staff-shell";
 import { ErrorNote, Loading, Pill, useAction } from "@/components/ui";
@@ -91,6 +92,7 @@ export default function SettingsPage() {
     <>
       <PageHead title="Settings" lede={isAdmin ? "Clinic rules for reminders, queues and retention. Every change is written to the audit log." : "Clinic rules. Only a clinic admin can change them."} />
       <div className="stack-l">
+        {isAdmin ? <StaffAccess /> : null}
         <section className="panel stack">
           <h2 style={{ fontSize: 19 }}>AI and messaging</h2>
           <ErrorNote error={providers.error} />

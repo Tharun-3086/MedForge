@@ -90,6 +90,7 @@ export function StaffShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="rail-foot">
+          <Link href="/">Switch Patient / Clinic</Link>
           <span>{me.user.name}</span>
           <span style={{ color: "#9fb3c6" }}>{me.user.role.charAt(0) + me.user.role.slice(1).toLowerCase()}</span>
           <button onClick={signOut}>Sign out</button>
@@ -103,6 +104,10 @@ export function StaffShell({ children }: { children: ReactNode }) {
         ) : null}
         <main className="page">{children}</main>
       </div>
+      <nav className="clinic-mobile-nav" aria-label="Clinic quick navigation">
+        {[{ href: "/today", label: "Today", perm: "patients" }, { href: "/patients", label: "Patients", perm: "patients" }, { href: "/reports", label: "Reports", perm: "intake" }, { href: "/tasks", label: "Tasks", perm: "tasks" }].filter(i => can(i.perm)).map(i => <Link key={i.href} href={i.href} aria-current={pathname === i.href ? "page" : undefined}>{i.label}</Link>)}
+        <Link href="/">Switch app</Link>
+      </nav>
     </div>
   );
 }
