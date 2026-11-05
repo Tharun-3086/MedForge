@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ToastProvider } from "@/components/ui";
 
 import "./globals.css";
+import "./care.css";
 
 export const metadata: Metadata = {
   title: "Niyamit Care Bridge",

@@ -215,6 +215,10 @@ def seed() -> dict[str, str]:
 
 
 def main() -> None:
+    from app.config import settings
+    if settings.is_production or not settings.demo_mode:
+        print("Demo seeding disabled for this environment.")
+        return
     logging.basicConfig(level=logging.INFO)
     with SessionLocal() as s:
         has_data = s.scalar(select(Clinic.id).limit(1)) is not None

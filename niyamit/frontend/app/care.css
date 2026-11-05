@@ -1,0 +1,16 @@
+.pt:has(.care-navigation) { padding-bottom: calc(112px + env(safe-area-inset-bottom)); background: linear-gradient(160deg, #e6f4fb 0, #faf5fa 280px, #f7f9fc 600px); }
+.care-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.care-action { min-height: 138px; border: 1px solid #fff; border-radius: 24px; padding: 20px; display: grid; grid-template-columns: 1fr auto; gap: 12px; text-align: left; font-weight: 600; cursor: pointer; color: var(--ink); box-shadow: 0 5px 16px #17324e08; }
+.care-icon { grid-column: 1 / -1; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 15px; background: #ffffffb8; }
+.care-action--report { background: #dff2e8; } .care-action--message { background: #dfedfb; } .care-action--passport { background: #ece5f8; } .care-action--family { background: #fff0d9; }
+.care-action:hover { filter: brightness(.98); }
+.care-navigation { position: fixed; z-index: 20; bottom: 0; left: 50%; transform: translateX(-50%); width: min(560px, 100%); background: #fffffff5; border: 1px solid var(--rule); border-radius: 24px 24px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 10px 8px calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 24px #17324e0a; }
+.care-navigation button { border: 0; background: transparent; color: var(--muted); display: grid; justify-items: center; align-content: start; gap: 5px; padding: 8px 2px; font-size: 12px; border-radius: 16px; cursor: pointer; }
+.care-navigation button[aria-current] { background: var(--teal-wash); color: var(--teal-strong); font-weight: 600; }
+.scan-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-block: 16px; }
+.scan-option { display: grid; justify-items: center; align-content: start; gap: 8px; padding: 16px 4px; background: #f1f7fb; border-radius: 20px; cursor: pointer; text-align: center; font-size: 14px; }
+.scan-option > span { font-size: 30px; color: var(--teal); }
+.scan-option:focus-within { outline: 3px solid var(--amber-bright); }
+.document-analysis { border-top: 1px solid var(--rule); padding-top: 14px; overflow-wrap: anywhere; }
+.document-analysis summary { cursor: pointer; }
+.document-analysis h3 { font-size: 17px; }

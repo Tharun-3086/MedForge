@@ -33,6 +33,16 @@ export function ReplyCard({ reply: r }: { reply: Reply }) {
         </div>
       ) : null}
       {r.status === "TRANSCRIPTION_FAILED" ? <p className="small" style={{ color: "var(--alarm)" }}>Voice note could not be transcribed ({r.error_code}). No transcript was invented.</p> : null}
+      {!tapped && words ? (
+        <div className="stack small" style={{ gap: 4, overflowWrap: "anywhere" }}>
+          {r.understanding.english_gloss?.trim() ? <>
+            <strong>ENGLISH MEANING · AI-GENERATED</strong>
+            <p lang="en">{r.understanding.english_gloss}</p>
+            <p className="muted">AI interpretation. Check the original message before acting.</p>
+          </> : <p className="muted">English meaning unavailable.</p>}
+          {r.detected_language ? <p className="muted">Detected language: {r.detected_language}</p> : null}
+        </div>
+      ) : null}
       {(r.understanding.intents ?? []).length > 0 ? (
         <div className="row">
           <Provenance kind={r.understanding_source === "BUTTON" ? "PATIENT_REPORTED" : "AI_PROPOSED"}

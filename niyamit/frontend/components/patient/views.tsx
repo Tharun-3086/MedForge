@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { api, ApiError, useApi } from "@/lib/api";
+import { api, ApiError, useApi, usePoll } from "@/lib/api";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { BARRIER_KEYS, t, tBarrier, tItemKind, tItemStatus, tMessageStatus, tRequestStatus, type Lang } from "@/lib/i18n";
 import type { AppointmentRequest, Plan } from "@/lib/types";
@@ -21,16 +21,17 @@ export function BarrierPicker({ lang, busy, onPick }: { lang: Lang; busy: boolea
   );
 }
 
-export function ReportUpload({ lang, onDone }: { lang: Lang; onDone: () => void }) {
+export function ReportUpload({ lang, onDone, onViewAnalysis }: { lang: Lang; onDone: () => void; onViewAnalysis?: () => void }) {
   const [state, setState] = useState<"idle" | "sending" | "done">("idle");
   const [problem, setProblem] = useState<string | null>(null);
+  const [sourceType, setSourceType] = useState("LAB_REPORT");
 
   async function send(file: File) {
     setState("sending");
     setProblem(null);
     const form = new FormData();
     form.set("file", file);
-    form.set("source_type", "LAB_REPORT");
+    form.set("source_type", sourceType);
     try {
       await api("/v1/p/documents", { form });
       setState("done");
@@ -45,13 +46,20 @@ export function ReportUpload({ lang, onDone }: { lang: Lang; onDone: () => void 
     <section className="card">
       <h2>{t(lang, "shareReport")}</h2>
       <p className="muted">{t(lang, "shareReportHelp")}</p>
-      {state === "done" ? <p className="notice notice--ok">{t(lang, "reportReceived")}</p> : (
-        <label className="record" style={{ cursor: state === "sending" ? "wait" : "pointer" }}>
-          {state === "sending" ? t(lang, "uploading") : t(lang, "chooseFile")}
-          <input type="file" accept="image/*,application/pdf" className="sr-only" disabled={state === "sending"}
-            onChange={(e) => e.target.files?.[0] && void send(e.target.files[0])} />
-        </label>
-      )}
+      <label className="field"><span>{t(lang, "documentKind")}</span><select value={sourceType} disabled={state === "sending"} onChange={(e) => setSourceType(e.target.value)}>
+        <option value="LAB_REPORT">{t(lang, "labReport")}</option><option value="PRESCRIPTION">{t(lang, "prescription")}</option><option value="OTHER">{t(lang, "otherDocument")}</option>
+      </select></label>
+      {state === "done" ? <p role="status" className="notice notice--ok">{t(lang, "reportReceived")}</p> : null}
+      {state === "done" && onViewAnalysis ? <button type="button" className="btn" onClick={onViewAnalysis}>{t(lang, "viewAnalysis")}</button> : null}
+      <div className="scan-options">
+        {(["camera", "gallery", "files"] as const).map((kind) => <label key={kind} className="scan-option">
+          <span aria-hidden="true">{kind === "camera" ? "◎" : kind === "gallery" ? "▧" : "▤"}</span>{t(lang, kind)}
+          <input type="file" accept={kind === "files" ? "image/jpeg,image/png,application/pdf" : "image/jpeg,image/png"} capture={kind === "camera" ? "environment" : undefined} className="sr-only" disabled={state === "sending"}
+            onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void send(file); }} />
+        </label>)}
+      </div>
+      {state === "sending" ? <p role="status">{t(lang, "uploading")}</p> : null}
+      <p className="small muted">{t(lang, "scanGuidance")}</p>
       {problem ? <p className="notice notice--fail">{problem}</p> : null}
     </section>
   );
@@ -65,13 +73,14 @@ type Passport = {
   appointments: { id: string; status: string; reference: string; slot_label: string | null }[];
   requests: AppointmentRequest[];
   you_told_us: { what: string; your_words: string | null; barrier: string | null; status: string; at: string }[];
-  documents: { filename: string; uploaded_at: string }[];
+  documents: { filename: string; uploaded_at: string; status: string }[];
   messages: { kind: string; status_label: string; at: string; channel: string }[];
   consents: Record<string, string>;
 };
 
 export function PassportView({ lang, onStop, onStart, busy }: { lang: Lang; onStop: () => void; onStart: () => void; busy: boolean }) {
-  const { data, error } = useApi<Passport>("/v1/p/passport");
+  const { data, error, reload } = useApi<Passport>("/v1/p/passport");
+  usePoll(Boolean(data?.documents.some((d) => d.status === "EXTRACTION_PENDING")), reload, 3000);
   const [confirmStop, setConfirmStop] = useState(false);
   if (error) return <p className="notice notice--fail">{error.message}</p>;
   if (!data) return <p className="muted">{t(lang, "loading")}</p>;
@@ -124,7 +133,8 @@ export function PassportView({ lang, onStop, onStart, busy }: { lang: Lang; onSt
       {data.documents.length ? (
         <section className="card">
           <h2>{t(lang, "documents")}</h2>
-          {data.documents.map((d, i) => <p key={i}>{d.filename}<span className="small muted" style={{ display: "block" }}>{fmtDateTime(d.uploaded_at, lang)}</span></p>)}
+          <button type="button" className="btn btn--quiet btn--small" onClick={() => void reload()}>{t(lang, "refreshDocuments")}</button>
+          {data.documents.map((d, i) => <p key={i}>{d.filename}<span className="small muted" style={{ display: "block" }}>{fmtDateTime(d.uploaded_at, lang)}</span><span className="small" style={{ display: "block" }}>{t(lang, `document_${d.status ?? "RECEIVED"}`)}</span></p>)}
         </section>
       ) : null}
 

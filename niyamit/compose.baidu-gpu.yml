@@ -1,0 +1,9 @@
+# Add after compose.baidu.yml to accelerate vision on the laptop RTX 3050.
+# Decoder remains on CPU initially to leave VRAM headroom for image encoding.
+services:
+  baidu-ocr:
+    image: niyamit-baidu-ocr:cuda
+    build:
+      context: ./ops/baidu-ocr
+      dockerfile: Dockerfile.cuda
+    gpus: all

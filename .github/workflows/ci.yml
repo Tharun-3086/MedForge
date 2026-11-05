@@ -1,0 +1,36 @@
+name: Verify Niyamit
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: niyamit
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: niyamit/frontend/package-lock.json
+      - name: Install and check frontend
+        working-directory: niyamit/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm audit --omit=dev --audit-level=high
+      - name: Build and start all services
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: Backend tests and health
+        run: |
+          docker compose exec -T backend pytest -q
+          curl --fail http://localhost:8000/healthz
+          curl --fail http://localhost:3000/patient
+      - name: Stop isolated CI stack
+        if: always()
+        run: docker compose down -v

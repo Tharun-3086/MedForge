@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     public_app_url: str = "http://localhost:3000"  # used in patient links inside messages
     cookie_secure: bool = False  # set true behind HTTPS
     session_hours: int = 12
+    patient_otp_provider: str = "development"  # development | disabled; real SMS not configured
     tasks_eager: bool = False  # run background jobs inline (tests / no-Redis mode)
     rate_limits_enabled: bool = True
     trusted_proxy_hops: int = 1  # proxies in front of the API that append X-Forwarded-For (the Next.js server)
@@ -36,6 +37,11 @@ class Settings(BaseSettings):
     asr_provider: str = "sarvam"  # sarvam | openai | none
     tts_provider: str = "sarvam"  # sarvam | none
     doc_provider: str = "sarvam"  # sarvam | openai | local
+    ocr_provider: str = "local"  # local | unlimited (optional, requires a compatible server)
+    unlimited_ocr_base_url: str = "http://host.docker.internal:8001/v1"
+    unlimited_ocr_model: str = "baidu/Unlimited-OCR"
+    unlimited_ocr_runtime: str = "vllm"  # vllm | llamacpp (experimental quantized model)
+    unlimited_ocr_timeout_seconds: float = 120.0
     sarvam_api_key: str = ""
     sarvam_base_url: str = "https://api.sarvam.ai"
     sarvam_chat_model: str = "sarvam-105b"
@@ -90,10 +96,14 @@ class Settings(BaseSettings):
         return bool(self.openai_api_key.strip())
 
     def validate_for_startup(self) -> None:
+        if self.is_production and self.patient_otp_provider == "development":
+            raise RuntimeError("Development OTP must be disabled in production.")
         if self.is_production and (self.secret_key in (DEV_SECRET, PLACEHOLDER_SECRET) or len(self.secret_key) < 32):
             raise RuntimeError("SECRET_KEY must be set to a long random value in production.")
         if self.is_production and self.demo_mode:
             raise RuntimeError("DEMO_MODE must be false in production (it enables demo logins).")
+        if self.is_production and (not self.cookie_secure or not self.public_app_url.startswith("https://")):
+            raise RuntimeError("Production requires COOKIE_SECURE=true and an HTTPS PUBLIC_APP_URL.")
 
 
 @lru_cache

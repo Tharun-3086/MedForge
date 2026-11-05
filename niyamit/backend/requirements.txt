@@ -1,6 +1,5 @@
 # Niyamit Care Bridge: backend dependencies (Python 3.12+, verified on 3.13).
-# Verified with: fastapi 0.162, starlette 1.6, sqlalchemy 2.1.6, alembic 1.20.1, psycopg 3.3.6,
-# celery 5.6.3, redis-py 8.1, pydantic 2.13, pypdf 5.9, pdfplumber 0.11.10, pypdfium2 5.13, pillow 12.3.
+# Docker installs with requirements.lock constraints (Python 3.13 / Linux).
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.30,<1.0
 pydantic>=2.7,<3

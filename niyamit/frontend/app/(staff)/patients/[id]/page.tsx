@@ -254,7 +254,7 @@ export default function PatientPage() {
         <p>Give this link only to the patient. It works for 24 hours and asks for their year of birth.</p>
         <input type="text" readOnly value={link ?? ""} onFocus={(e) => e.currentTarget.select()} aria-label="Patient link" />
         <div className="row">
-          <button className="btn btn--quiet btn--small" onClick={() => link && navigator.clipboard?.writeText(link).then(() => toast("Link copied."))}>Copy link</button>
+          <button className="btn btn--quiet btn--small" onClick={() => link && navigator.clipboard?.writeText(link).then(() => toast("Link copied.")).catch(() => toast("Copy failed. Select the link above and press Ctrl+C.", true))}>Copy link</button>
           {link ? <a className="btn btn--quiet btn--small" href={link.replace(/^https?:\/\/[^/]+/, "")} target="_blank" rel="noreferrer">Open as the patient (demo)</a> : null}
         </div>
       </Modal>

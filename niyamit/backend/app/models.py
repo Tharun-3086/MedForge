@@ -140,6 +140,18 @@ class PatientAccessToken(Base):
     created_at: Mapped[datetime] = created()
 
 
+class PatientOtpChallenge(Base):
+    """One short-lived, single-use development challenge per hashed phone."""
+    __tablename__ = "patient_otp_challenges"
+    phone_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, unique=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class CaregiverGrant(Base):
     __tablename__ = "caregiver_grants"
     id: Mapped[uuid.UUID] = pk()

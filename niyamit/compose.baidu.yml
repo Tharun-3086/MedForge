@@ -1,0 +1,18 @@
+# Optional experimental Baidu CPU service. Models must be downloaded and verified first.
+services:
+  baidu-ocr:
+    build: ./ops/baidu-ocr
+    profiles: [baidu]
+    ports: ["127.0.0.1:8001:8000"]
+    volumes:
+      - baidu_models:/models:ro
+    environment:
+      LLAMA_MEDIA_MARKER: '<image>'
+    mem_limit: 6g
+    cpus: 4
+    command: ["-m", "/models/unlimited-ocr-Q4_K_M.gguf", "--mmproj", "/models/mmproj-unlimited-ocr-bf16.gguf", "--alias", "baidu/Unlimited-OCR", "--host", "0.0.0.0", "--port", "8000", "--chat-template", "deepseek-ocr", "--no-jinja", "--flash-attn", "off", "--no-warmup", "-c", "4096", "--special", "-np", "1", "-t", "4", "-ngl", "0", "--temp", "0", "--dry-multiplier", "0.8", "--dry-base", "1.75", "--dry-allowed-length", "35", "--dry-penalty-last-n", "128", "--dry-sequence-breaker", "none"]
+
+volumes:
+  baidu_models:
+    external: true
+    name: niyamit_baidu_models

@@ -1,0 +1,25 @@
+# Pinned experimental Unlimited-OCR runtime, RTX 3050 (SM 86).
+FROM debian:bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential cmake curl ca-certificates libcurl4-openssl-dev && rm -rf /var/lib/apt/lists/*
+RUN curl -fL --retry 4 https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/keyring.deb && dpkg -i /tmp/keyring.deb && apt-get update && apt-get install -y --no-install-recommends cuda-nvcc-12-8 cuda-cudart-dev-12-8 libcublas-dev-12-8 && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY llama-source.tar.gz /tmp/llama-source.tar.gz
+RUN echo '5c17acc0daee511e6bf3846638fdcb393c31cfeb7a8b38d57740019e07adddf1  /tmp/llama-source.tar.gz' | sha256sum -c - && tar xzf /tmp/llama-source.tar.gz --strip-components=1
+ENV CUDACXX=/usr/local/cuda-12.8/bin/nvcc
+RUN ln -s libcuda.so /usr/local/cuda-12.8/targets/x86_64-linux/lib/stubs/libcuda.so.1
+# Keep compiler output across retries. Driver stubs are build-only; NVIDIA's
+# container runtime supplies the real driver library when the service starts.
+RUN --mount=type=cache,id=niyamit-baidu-cuda-sm86,target=/src/build \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_CUDA=ON -DGGML_CUDA_FA=OFF -DCMAKE_CUDA_ARCHITECTURES=86-real -DLLAMA_BUILD_TESTS=OFF -DCMAKE_EXE_LINKER_FLAGS=-Wl,-rpath-link,/usr/local/cuda-12.8/targets/x86_64-linux/lib/stubs \
+    && cmake --build build -j 4 --target llama-server && mkdir -p /out && cp -a build/bin/. /out/
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libcurl4 ca-certificates && rm -rf /var/lib/apt/lists/* && useradd --uid 10002 --create-home ocr
+COPY --from=build /out/ /app/
+COPY --from=build /usr/local/cuda-12.8/targets/x86_64-linux/lib/libcudart.so* /app/
+COPY --from=build /usr/local/cuda-12.8/targets/x86_64-linux/lib/libcublas.so* /app/
+COPY --from=build /usr/local/cuda-12.8/targets/x86_64-linux/lib/libcublasLt.so* /app/
+ENV LD_LIBRARY_PATH=/app
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+USER ocr
+ENTRYPOINT ["/app/llama-server"]

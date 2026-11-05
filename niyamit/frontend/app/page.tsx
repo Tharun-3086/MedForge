@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-
+import Link from "next/link";
+import { BrandMark } from "@/components/ui";
 export default function Home() {
-  redirect("/today");
+ return <main className="welcome-shell"><div className="welcome-content stack-l"><header className="stack"><BrandMark className="brand-mark"/><p>NIYAMIT CARE BRIDGE</p><h1>Your care, connected.</h1><p className="muted">Choose where you would like to go.</p></header><div className="welcome-options"><section className="panel stack-l"><h2>For patients</h2><p>Your follow-ups, appointments and messages to your clinic, in your language.</p><Link className="btn" href="/patient">Open patient app →</Link><p className="small muted">తెలుగు · हिन्दी · English</p></section><section className="panel stack-l"><h2>For clinic staff</h2><p>Manage patient follow-ups, review replies and coordinate care with your team.</p><Link className="btn btn--quiet" href="/login">Staff sign in →</Link><p className="small muted">For authorised clinic team members.</p></section></div></div></main>;
 }
