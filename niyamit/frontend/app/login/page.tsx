@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
@@ -57,11 +58,11 @@ export default function LoginPage() {
           <div className="row" style={{ gap: 12 }}>
             <BrandMark className="brand-mark" />
             <div>
-              <h1 style={{ fontSize: 26 }}>Niyamit Care Bridge</h1>
+              <h1 style={{ fontSize: 26 }}>Clinic staff sign in</h1>
               <p className="muted">Diabetes follow-ups that do not slip through.</p>
             </div>
           </div>
-          <form onSubmit={onSubmit} className="stack" style={{ marginTop: 8 }}>
+          <Link className="btn btn--quiet" href="/patient">Are you a patient? Open patient app</Link><form onSubmit={onSubmit} className="stack" style={{ marginTop: 8 }}>
             <label className="field">
               <span>Email</span>
               <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -73,7 +74,7 @@ export default function LoginPage() {
             <ErrorNote error={error} />
             <button className="btn" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
           </form>
-          <p className="small muted">Patients do not sign in here. They open the link in their reminder message.</p>
+          <p className="small muted">Patients use their personal clinic link.</p>
         </section>
 
         {demo ? (

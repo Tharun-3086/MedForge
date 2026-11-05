@@ -27,7 +27,8 @@ TEST_URL = _test_url()
 os.environ.update({
     "DATABASE_URL": TEST_URL, "TASKS_EAGER": "true", "RATE_LIMITS_ENABLED": "false", "INLINE_SCHEDULER": "false", "DEMO_MODE": "true",
     "APP_ENV": "test", "LLM_PROVIDER": "rules", "ASR_PROVIDER": "none", "TTS_PROVIDER": "none",
-    "DOC_PROVIDER": "local", "SARVAM_API_KEY": "", "OPENAI_API_KEY": "", "WHATSAPP_ENABLED": "false",
+    "DOC_PROVIDER": "local", "OCR_PROVIDER": "local", "UNLIMITED_OCR_RUNTIME": "vllm",
+    "SARVAM_API_KEY": "", "OPENAI_API_KEY": "", "WHATSAPP_ENABLED": "false",
     "SECRET_KEY": "test-secret-key-for-automated-tests-only-0123456789",
     "STORAGE_DIR": tempfile.mkdtemp(prefix="niyamit-test-files-"),
 })

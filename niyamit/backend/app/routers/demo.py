@@ -87,22 +87,82 @@ def phone_patients(staff: Staff = Depends(require_staff), db: Session = Depends(
     return {"patients": [S.patient_brief(p) for p in rows]}
 
 
+
 def _thread(db: Session, patient: Patient) -> dict:
-    outs = db.scalars(select(OutboundMessage).where(OutboundMessage.patient_id == patient.id,
-                                                    OutboundMessage.channel == "SIMULATED",
-                                                    OutboundMessage.status.in_(ON_PHONE))).all()
-    ins = db.execute(select(PatientReply, ProviderEvent).outerjoin(
-        ProviderEvent, ProviderEvent.id == PatientReply.provider_event_id).where(
-        PatientReply.patient_id == patient.id, PatientReply.channel == "SIMULATED")).all()
-    items = [{"direction": "out", "id": str(m.id), "body": m.body, "status": m.status,
-              "status_label": S.STATUS_LABEL.get(m.status), "kind": m.kind, "at": S.iso(m.sent_at or m.created_at)}
-             for m in outs]
-    items += [{"direction": "in", "id": str(r.id), "body": r.text or r.transcript or "(voice note)",
-               "status": r.status, "event_id": ev.provider_event_id if ev else None,
-               "duplicates_ignored": ev.duplicate_count if ev else 0, "at": S.iso(r.created_at)} for r, ev in ins]
+    outs = db.scalars(
+        select(OutboundMessage).where(
+            OutboundMessage.patient_id == patient.id,
+            OutboundMessage.channel == "SIMULATED",
+            OutboundMessage.status.in_(ON_PHONE),
+        )
+    ).all()
+
+    ins = db.execute(
+        select(PatientReply, ProviderEvent)
+        .outerjoin(
+            ProviderEvent,
+            ProviderEvent.id == PatientReply.provider_event_id,
+        )
+        .where(
+            PatientReply.patient_id == patient.id,
+            PatientReply.channel == "SIMULATED",
+        )
+    ).all()
+
+    # Outgoing clinic messages.
+    items = [
+        {
+            "direction": "out",
+            "id": str(m.id),
+            "body": m.body,
+            "status": m.status,
+            "status_label": S.STATUS_LABEL.get(m.status),
+            "kind": m.kind,
+            "at": S.iso(m.sent_at or m.created_at),
+        }
+        for m in outs
+    ]
+
+    # Incoming patient messages.
+    # Keep the original text and expose the existing English gloss separately.
+    items += [
+        {
+            "direction": "in",
+            "id": str(r.id),
+
+            # Original patient message — never overwrite it.
+            "body": r.text or r.transcript or "(voice note)",
+
+            # Reuse the gloss already stored by the AI pipeline.
+            "english_gloss": (r.understanding or {}).get("english_gloss"),
+
+            # Patient preference and detected language are different.
+            "patient_preferred_language": patient.preferred_language,
+            "detected_language": r.detected_language,
+
+            # Shows which processing path understood the reply.
+            "understanding_source": r.understanding_source,
+
+            "status": r.status,
+            "event_id": ev.provider_event_id if ev else None,
+            "duplicates_ignored": ev.duplicate_count if ev else 0,
+            "at": S.iso(r.created_at),
+        }
+        for r, ev in ins
+    ]
+
+    # Keep messages in chronological order.
     items.sort(key=lambda x: x["at"] or "")
-    return {"patient": S.patient_brief(patient), "simulated": True, "messages": items,
-            "note": "SIMULATED phone. Messages here travel through the same signed webhook path as WhatsApp."}
+
+    return {
+        "patient": S.patient_brief(patient),
+        "simulated": True,
+        "messages": items,
+        "note": (
+            "SIMULATED phone. Messages here travel through "
+            "the same signed webhook path as WhatsApp."
+        ),
+    }
 
 
 @router.get("/phone/{patient_id}", dependencies=[Depends(demo_only)])

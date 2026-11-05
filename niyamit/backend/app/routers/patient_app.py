@@ -5,6 +5,7 @@ Caregivers get only the scopes the patient granted, re-checked on every request.
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import date, timedelta
 from typing import Literal
 
@@ -21,7 +22,7 @@ from app.audit import audit
 from app.config import settings
 from app.db import get_db, utcnow
 from app.enums import ActorType, CaregiverScope, ConsentPurpose, ConsentStatus, InputMode, ReplyStatus
-from app.models import Appointment, AppointmentRequest, AvailabilitySlot, CaregiverGrant, Clinic, Patient, PatientReply
+from app.models import Appointment, AppointmentRequest, AvailabilitySlot, CaregiverGrant, Clinic, Patient, PatientReply, SourceArtifact, ExtractionProposal
 from app.routers.intake import read_limited
 from app.security import (
     CAREGIVER_COOKIE,
@@ -37,7 +38,7 @@ from app.security import (
     rate_limit,
     set_cookie,
 )
-from app.services import booking, caregivers, guards, intake, patients, replies, views
+from app.services import booking, caregivers, guards, intake, patients, replies, views, patient_otp
 from app.services.common import active_items, clinic_today, clinic_tz, current_item, first_name, slot_label
 from app.services.replies import EXPLICIT
 
@@ -115,6 +116,69 @@ def home_payload(db: Session, patient: Patient, clinic: Clinic) -> dict:
 
 
 # ------------------------------------------------------------------ session
+class OtpRequestIn(BaseModel):
+    phone: str = Field(min_length=8, max_length=32)
+
+
+class OtpVerifyIn(OtpRequestIn):
+    challenge_id: uuid.UUID
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+@router.get("/otp/config")
+def otp_config():
+    return {"available": patient_otp.available(), "development": patient_otp.available()}
+
+
+@router.post("/otp/request")
+def otp_request(body: OtpRequestIn, request: Request, db: Session = Depends(get_db)):
+    rate_limit(f"otp-request:{client_ip(request)}", 10, 3600)
+    rate_limit(f"otp-phone:{patient_otp.digest(patient_otp.phone_number(body.phone))}", 5, 3600)
+    return patient_otp.request_code(db, body.phone)
+
+
+@router.post("/otp/verify")
+def otp_verify(body: OtpVerifyIn, request: Request, response: Response, db: Session = Depends(get_db)):
+    rate_limit(f"otp-verify:{client_ip(request)}", 30, 300)
+    matches = patient_otp.verify_code(db, body.phone, body.challenge_id, body.code)
+    response.delete_cookie(PATIENT_COOKIE, path="/")
+    response.delete_cookie("nyt_patient_choice", path="/")
+    if not matches:
+        return {"authenticated": False, "profiles": [], "message": "No synthetic clinic record is linked to this number. Ask your clinic to register the correct number."}
+    if len(matches) == 1:
+        p = matches[0]
+        set_cookie(response, PATIENT_COOKIE, issue_session("patient", str(p.id), str(p.clinic_id)))
+        audit(db, clinic_id=p.clinic_id, action="PATIENT_OTP_LOGIN", actor_type=ActorType.PATIENT,
+              actor_id=str(p.id), patient_id=p.id, detail={"mode": "development"})
+        db.commit()
+        return {"authenticated": True}
+    ticket = issue_session("patient-choice", "verified-phone", "", ids=[str(p.id) for p in matches],
+                           exp=int((utcnow()+timedelta(minutes=5)).timestamp()))
+    set_cookie(response, "nyt_patient_choice", ticket)
+    return {"authenticated": False, "profiles": [{"id": str(p.id), "clinic": db.get(Clinic, p.clinic_id).name} for p in matches]}
+
+
+class ProfileChoiceIn(BaseModel):
+    patient_id: uuid.UUID
+
+
+@router.post("/otp/select")
+def otp_select(body: ProfileChoiceIn, request: Request, response: Response, db: Session = Depends(get_db)):
+    patient_otp.guard()
+    claims = decode_session(request.cookies.get("nyt_patient_choice", ""), "patient-choice")
+    if str(body.patient_id) not in claims.get("ids", []):
+        raise HTTPException(403, "This record is not linked to the verified number.")
+    p = db.get(Patient, body.patient_id)
+    if p is None or not p.is_synthetic:
+        raise HTTPException(403, "Record is unavailable.")
+    set_cookie(response, PATIENT_COOKIE, issue_session("patient", str(p.id), str(p.clinic_id)))
+    response.delete_cookie("nyt_patient_choice", path="/")
+    audit(db, clinic_id=p.clinic_id, action="PATIENT_OTP_LOGIN", actor_type=ActorType.PATIENT,
+          actor_id=str(p.id), patient_id=p.id, detail={"mode": "development"})
+    db.commit()
+    return {"authenticated": True}
+
+
 class LinkIn(BaseModel):
     token: str = Field(min_length=10, max_length=80)
 
@@ -154,6 +218,7 @@ def verify(body: VerifyIn, request: Request, response: Response, db: Session = D
 @router.post("/logout")
 def logout(response: Response) -> dict:
     response.delete_cookie(PATIENT_COOKIE, path="/")
+    response.delete_cookie("nyt_patient_choice", path="/")
     return {"ok": True}
 
 
@@ -361,6 +426,40 @@ async def upload_document(file: UploadFile = File(...),
     db.commit()
     return {"filename": artifact.filename, "status": "Received — the clinic team will review it.",
             "uploaded_at": S.iso(artifact.created_at)}
+
+
+@router.get("/documents")
+def patient_documents(me: PatientPrincipal = Depends(current_patient), db: Session = Depends(get_db)):
+    rows = db.execute(select(SourceArtifact, ExtractionProposal).outerjoin(ExtractionProposal,
+        (ExtractionProposal.artifact_id == SourceArtifact.id) & (ExtractionProposal.patient_id == me.patient_id)
+        & (ExtractionProposal.clinic_id == me.clinic_id)).where(
+        SourceArtifact.patient_id == me.patient_id, SourceArtifact.clinic_id == me.clinic_id,
+        SourceArtifact.source_type != "VOICE_NOTE", SourceArtifact.deleted_at.is_(None))
+        .order_by(SourceArtifact.created_at.desc()).limit(10)).all()
+    return {"documents": [{"id": str(a.id), "filename": a.filename, "uploaded_at": S.iso(a.created_at),
+        "status": p.status if p else "RECEIVED", "ocr_provider": p.ocr_provider if p else "",
+        "automatic_fields": [{"label": S.FIELD_LABELS.get(f.name, f.name), "value": f.proposed_value,
+                              "as_written": f.extracted_value, "review_status": f.status} for f in p.fields] if p else [],
+        "automatic_text": "\n".join(str(b.get("text", "")) for b in (p.blocks or []))[:30000] if p else "",
+        "clinic_reviewed_fields": [{"label": S.FIELD_LABELS.get(f.name, f.name), "value": f.value,
+                                    "reviewed_at": S.iso(f.reviewed_at)} for f in p.fields if f.status == "APPROVED"] if p else [],
+        "plan_approved": bool(p and p.status == "APPROVED" and p.plan_id)} for a, p in rows]}
+
+
+@router.get("/documents/{artifact_id}/file")
+def patient_document_file(artifact_id: uuid.UUID, me: PatientPrincipal = Depends(current_patient), db: Session = Depends(get_db)):
+    from app import storage
+    a = db.scalar(select(SourceArtifact).where(SourceArtifact.id == artifact_id,
+        SourceArtifact.patient_id == me.patient_id, SourceArtifact.clinic_id == me.clinic_id,
+        SourceArtifact.source_type != "VOICE_NOTE", SourceArtifact.deleted_at.is_(None)))
+    if a is None:
+        raise HTTPException(404, "Document not found.")
+    try:
+        data = storage.load(a.storage_key)
+    except storage.StorageUnavailable:
+        raise HTTPException(503, "Original document is temporarily unavailable.") from None
+    return Response(data, media_type=a.mime_type, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": 'inline; filename="document.' + ('pdf' if a.mime_type == 'application/pdf' else 'png' if a.mime_type == 'image/png' else 'jpg') + '"'})
 
 
 class CaregiverIn(BaseModel):

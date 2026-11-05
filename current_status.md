@@ -1,38 +1,40 @@
-yes for the web app and backend, within the limits below. The core workflow in the PRD (capture, remind, reply, route to a human, book, timeline) works, and I saw it run end to end. A few things are unproven or missing.
+# Release status — 2026-11-05
 
-#Works (I tested it)
+## Ready for GitHub and local demo deployment
 
-All 87 backend tests pass, including the PRD’s 18 acceptance gates.
+Patient and clinic interfaces run together in the Docker stack. The patient app supports development phone OTP for synthetic records, report upload, original-file access and separately labelled automatic analysis and clinic-reviewed information. Tesseract is the default OCR; Baidu remains optional and is stopped locally.
 
-Plan approval, document review, reply understanding, booking, owned tasks, clinical handoff, opt-out, duplicate-event protection and clinic isolation all behaved correctly in my run.
+Release preparation includes refreshed setup/deployment/testing/security documentation, GitHub CI, locked frontend installation, a pinned backend dependency snapshot, enforced TypeScript builds and production startup/demo-seeding safeguards. The obsolete ZIP source snapshot has been moved outside the working tree. No commit or push was performed.
 
-The unsure reply “hmm ok maybe” gets a question rather than a guess.
+## Verified locally
 
-Seeded availability is used, and the bookings are labelled as demo.
+- Backend: **121 tests passed**, including migrations, tenant/access controls, OTP, analysis ownership and production configuration guards. One Starlette/httpx test-client deprecation warning remains.
+- Frontend: TypeScript check and Docker production build passed.
+- Dependency audits: frontend production dependencies and pinned Python dependencies reported no known vulnerabilities at check time.
+- Live browser: synthetic patient OTP login, wrong-code rejection, prescription upload, Tesseract OCR, original download, clinic correction/approval, preserved automatic analysis, separate reviewed information and logout access denial passed.
+- Live scan used Tesseract plus the configured Sarvam document extractor; it was not a claim of fully offline or clinically validated interpretation.
+- Compose validation and local service health passed. Baidu is not running.
+- Candidate-file scan found no configured secret values/private-key markers and no files over 5 MB. This is not a full historical Git secret audit.
 
-The patient app, family helper (grant and revoke), Visit Capsule, metrics and test panel all work.
+GitHub-hosted CI has not run yet because nothing has been pushed. Manual emulator microphone/camera acceptance and external deployment are not claimed.
 
-#Missing or unproven
+## Outstanding before real-patient production use
 
-Voice (PRD FR-11) only works with a Sarvam key. Without a key, voice notes are switched off, so you can’t demo voice until you add one. The Sarvam calls match their current docs, but they have never run with a real key.
+Real SMS OTP integration, clinical/native-language approval, production account provisioning, HTTPS/infrastructure/security review, backup restore rehearsal and real-device acceptance remain required. The supplied Compose file uses public demo credentials and is for synthetic data. See [deployment gates](niyamit/DEPLOYMENT.md).
 
-Language accuracy isn’t proven.
+## Publish this branch yourself
 
-The PRD target is at least 90% intent accuracy, reported per language pair.
+From PowerShell:
 
-The 92% (48 of 52) comes from offline rules written alongside the test set, so it’s optimistic.
+```powershell
+cd D:\niyamit\MedForge-Git
+git status
+git add .
+git diff --cached --check
+git diff --cached --stat
+# Review the staged changes before committing.
+git commit -m "Prepare Niyamit patient and clinic demo for deployment"
+git push -u origin kiran/backend-infrastructure
+```
 
-You need a live Sarvam evaluation run. I didn’t check whether the panel splits results by language pair.
-
-Docker has never been run. Neither I nor the original build tested docker compose up --build. The same services worked fine when I ran them directly.
-
-WhatsApp is untested. The PRD allows a clearly labelled simulated channel, so this is fine for the hackathon.
-
-The Android app isn’t in your zip. The PRD actually says web app first and no native apps for the MVP, so Android is extra. But your status says it exists, and this zip is the older version.
-
-An oversized upload (11 MB) gives a vague error. It’s a minor fault.
-
-PRD pilot-level items I didn’t verify: staff MFA, one-tap calling, accessibility, and the retention and deletion workflow. Treat them as unchecked, not as failing.
-Not code: clinical review of message templates, Telugu and Hindi checks by native speakers, and legal and privacy review. The PRD requires all of these before a real patient pilot.
-
-For a hackathon demo, this code covers what the PRD requires. Add the Sarvam key, run docker compose up --build, and run the language evaluation, and it’s ready to demo. It is not ready for real patients.
+Remote verified: `https://github.com/Tharun-3086/MedForge.git`. The local branch is `kiran/backend-infrastructure`; it did not already exist on the remote when checked. Do not force-push. Secrets and local build/model artifacts are ignored.

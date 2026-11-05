@@ -1,10 +1,12 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { ReplyResult, type ReplyView } from "@/components/patient/reply-result";
 import { VoiceRecorder } from "@/components/patient/voice";
+import { CareActions, CareNavigation, type CareDestination } from "@/components/patient/care-navigation";
+import { DocumentAnalysis } from "@/components/patient/document-analysis";
 import { BarrierPicker, FamilyView, PassportView, ReportUpload } from "@/components/patient/views";
 import { BrandMark } from "@/components/ui";
 import { api, ApiError, clientKey } from "@/lib/api";
@@ -27,6 +29,7 @@ type View = "home" | "result" | "barrier" | "passport" | "family" | "report";
 
 export default function PatientApp() {
   const { token } = useParams<{ token: string }>();
+  const router = useRouter();
   const [phase, setPhase] = useState<"loading" | "verify" | "ready" | "broken">("loading");
   const [lang, setLang] = useState<Lang>("te");
   const [clinicName, setClinicName] = useState("");
@@ -37,6 +40,19 @@ export default function PatientApp() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [focusMessage, setFocusMessage] = useState(false);
+  function navigateCare(destination: CareDestination) {
+    setView(destination === "message" ? "home" : destination);
+    setFocusMessage(destination === "message");
+    if (destination !== "message") window.scrollTo({ top: 0, behavior: "instant" });
+  }
+  useEffect(() => {
+    if (!focusMessage || view !== "home") return;
+    const field = document.getElementById("patient-message");
+    field?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    field?.focus({ preventScroll: true });
+    setFocusMessage(false);
+  }, [focusMessage, view]);
 
   const loadHome = useCallback(async () => {
     const h = await api<Home>("/v1/p/home");
@@ -52,6 +68,9 @@ export default function PatientApp() {
   useEffect(() => {
     (async () => {
       try {
+        if (!token) {
+          await loadHome(); setPhase("ready"); return;
+        }
         const info = await api<{ clinic_name: string; clinic_short_name: string; require_verification: boolean; language: string; already_verified: boolean }>(
           "/v1/p/link", { body: { token } });
         setClinicName(info.clinic_short_name || info.clinic_name);
@@ -69,10 +88,11 @@ export default function PatientApp() {
         }
         setPhase("verify");
       } catch {
+        if (!token) { router.replace("/patient"); return; }
         setPhase("broken");
       }
     })();
-  }, [token, loadHome]);
+  }, [token, loadHome, router]);
 
   async function verify(e: FormEvent) {
     e.preventDefault();
@@ -169,6 +189,9 @@ export default function PatientApp() {
         {view === "home" ? (
           <>
             <h1>{t(lang, "hello", { name: home.patient.first_name })}</h1>
+            <button className="pt-link" onClick={async () => { await api("/v1/p/logout", {method:"POST"}); router.replace("/patient"); }}>{lang === "hi" ? "साइन आउट" : lang === "te" ? "సైన్ అవుట్" : "Sign out"}</button>
+            <CareActions lang={lang} onSelect={navigateCare} />
+            <DocumentAnalysis lang={lang} onRefresh={loadHome} />
             {home.patient.opted_out ? (
               <div className="notice">{t(lang, "remindersOff")} <button className="pt-link" onClick={() => choose("START")}>{t(lang, "startReminders")}</button></div>
             ) : null}
@@ -226,7 +249,7 @@ export default function PatientApp() {
             <section className="card">
               <h2>{t(lang, "ownWords")}</h2>
               <form className="stack" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void send("/v1/p/replies", { text }); }}>
-                <textarea aria-label={t(lang, "typeHere")} placeholder={t(lang, "typeHere")} value={text} onChange={(e) => setText(e.target.value)} />
+                <textarea id="patient-message" aria-label={t(lang, "typeHere")} placeholder={t(lang, "typeHere")} value={text} onChange={(e) => setText(e.target.value)} />
                 <button className="btn" type="submit" disabled={busy || !text.trim()}>{t(lang, "send")}</button>
               </form>
               <VoiceRecorder lang={lang} available={home.voice_available} consented={home.consents.AI_PROCESSING === "GRANTED"}
@@ -255,7 +278,7 @@ export default function PatientApp() {
           </>
         ) : null}
         {view === "barrier" ? (<>{back}<BarrierPicker lang={lang} busy={busy} onPick={(k) => choose(`BARRIER:${k}`)} /></>) : null}
-        {view === "report" ? (<>{back}<ReportUpload lang={lang} onDone={() => void loadHome()} /></>) : null}
+        {view === "report" ? (<>{back}<ReportUpload lang={lang} onDone={() => void loadHome()} onViewAnalysis={() => navigateCare("home")} /></>) : null}
         {view === "passport" ? (
           <>
             {back}
@@ -264,6 +287,7 @@ export default function PatientApp() {
           </>
         ) : null}
         {view === "family" ? (<>{back}<FamilyView lang={lang} /></>) : null}
+        <CareNavigation lang={lang} current={view} onSelect={navigateCare} />
       </div>
     </main>
   );

@@ -222,8 +222,18 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
     blocks: list[dict[str, Any]] = []
     pages: list[dict[str, Any]] = []
     ocr = "none"
+    if settings.ocr_provider == "unlimited" and not local_only and "DOC_PROVIDER_DOWN" not in faults:
+        try:
+            from app.ai.providers.unlimited_ocr import read_blocks as read_unlimited
+            blocks, pages, ocr = read_unlimited(data, mime)
+            notes.append("Baidu OCR text is AI-generated; verify against the original document. Exact evidence boxes are unavailable.")
+        except ProviderError as exc:
+            if exc.code == "EMPTY_IMAGE":
+                raise ProviderError("intake", "NO_TEXT_FOUND", "The uploaded document contains no readable contrast.") from None
+            notes.append(f"Baidu OCR unavailable ({exc.code}); using existing local document reading.")
     try:
-        blocks, pages, ocr = read_blocks(data, mime)
+        if not blocks:
+            blocks, pages, ocr = read_blocks(data, mime)
     except ProviderError as exc:
         notes.append(f"Local text reading unavailable ({exc.provider}: {exc.code}).")
     if blocks and INSTRUCTION_LIKE.search(" ".join(b["text"] for b in blocks)):

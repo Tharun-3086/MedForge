@@ -11,6 +11,14 @@ export const LANGS: { code: Lang; label: string }[] = [
 type Dict = Record<string, { en: string; hi: string; te: string }>;
 
 const S: Dict = {
+  camera: { en: "Camera", hi: "कैमरा", te: "కెమెరా" },
+  gallery: { en: "Gallery", hi: "गैलरी", te: "గ్యాలరీ" },
+  files: { en: "Files / PDF", hi: "फ़ाइल / PDF", te: "ఫైల్ / PDF" },
+  documentKind: { en: "Document type", hi: "दस्तावेज़ का प्रकार", te: "పత్రం రకం" },
+  labReport: { en: "Lab report", hi: "लैब रिपोर्ट", te: "ల్యాబ్ రిపోర్ట్" },
+  prescription: { en: "Prescription", hi: "पर्चा", te: "ప్రిస్క్రిప్షన్" },
+  otherDocument: { en: "Other document", hi: "अन्य दस्तावेज़", te: "ఇతర పత్రం" },
+  scanGuidance: { en: "Keep the full page in view, with good lighting and no blur. Your clinic reviews extracted information before using it for care.", hi: "पूरा पन्ना अच्छी रोशनी में साफ़ दिखाएँ। देखभाल में उपयोग से पहले क्लिनिक निकाली गई जानकारी की समीक्षा करता है।", te: "మంచి వెలుతురులో పూర్తి పేజీ స్పష్టంగా కనిపించేలా చూడండి. చికిత్సలో ఉపయోగించే ముందు క్లినిక్ సేకరించిన సమాచారాన్ని సమీక్షిస్తుంది." },
   loading: { en: "Loading…", hi: "लोड हो रहा है…", te: "లోడ్ అవుతోంది…" },
   verifyTitle: { en: "Confirm it is you", hi: "पुष्टि करें कि यह आप हैं", te: "ఇది మీరేనని నిర్ధారించండి" },
   verifyHelp: {
@@ -19,6 +27,14 @@ const S: Dict = {
     te: "మీ ఫాలో-అప్ వివరాలు చూడటానికి మీ పుట్టిన సంవత్సరం నమోదు చేయండి.",
   },
   birthYear: { en: "Year of birth", hi: "जन्म वर्ष", te: "పుట్టిన సంవత్సరం" },
+  viewAnalysis: { en: "View analysis", hi: "विश्लेषण देखें", te: "విశ్లేషణ చూడండి" },
+  refreshDocuments: { en: "Refresh status", hi: "स्थिति फिर से देखें", te: "స్థితిని మళ్లీ చూడండి" },
+  document_RECEIVED: { en: "Received by the clinic", hi: "क्लिनिक को मिल गया", te: "క్లినిక్‌కు అందింది" },
+  document_EXTRACTION_PENDING: { en: "Reading your document", hi: "आपका दस्तावेज़ पढ़ा जा रहा है", te: "మీ పత్రాన్ని చదువుతున్నాము" },
+  document_NEEDS_REVIEW: { en: "Waiting for clinic review", hi: "क्लिनिक की समीक्षा का इंतज़ार है", te: "క్లినిక్ సమీక్ష కోసం వేచి ఉంది" },
+  document_EXTRACTION_FAILED: { en: "Automatic reading failed. The clinic can review the original.", hi: "अपने आप पढ़ना सफल नहीं हुआ। क्लिनिक मूल दस्तावेज़ देख सकता है।", te: "స్వయంచాలకంగా చదవడం విఫలమైంది. క్లినిక్ అసలు పత్రాన్ని చూడవచ్చు." },
+  document_APPROVED: { en: "Reviewed — follow-up plan updated", hi: "समीक्षा पूरी — फ़ॉलो-अप योजना अपडेट हुई", te: "సమీక్ష పూర్తయింది — ఫాలో-అప్ ప్రణాళిక నవీకరించబడింది" },
+  document_REJECTED: { en: "Not used for your care plan. Contact the clinic for details.", hi: "आपकी देखभाल योजना में शामिल नहीं किया गया। जानकारी के लिए क्लिनिक से संपर्क करें।", te: "మీ సంరక్షణ ప్రణాళికలో ఉపయోగించలేదు. వివరాల కోసం క్లినిక్‌ను సంప్రదించండి." },
   continue: { en: "Continue", hi: "आगे बढ़ें", te: "కొనసాగించండి" },
   linkProblem: {
     en: "This link does not work any more. Ask the clinic to send a new one.",

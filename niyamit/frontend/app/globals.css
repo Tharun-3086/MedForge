@@ -382,3 +382,20 @@ dialog.modal::backdrop { background: rgba(15, 42, 68, 0.35); }
 .account .who { font-weight: 600; }
 .upload-form { display: grid; gap: 14px; grid-template-columns: 1fr 1fr 1.5fr auto; align-items: end; }
 @media (max-width: 1000px) { .upload-form { grid-template-columns: 1fr; } }
+
+/* Keep conversation scrolling inside the phone and preserve message height. */
+.phone .thread { min-height: 0; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+.phone .thread > * { flex-shrink: 0; }
+.phone .composer input { min-width: 0; }
+@media (max-width: 900px) { .phone { height: min(680px, 85dvh); min-height: 360px; } }
+/* Rounded surfaces and separate patient/staff entrances. */
+:root { --radius-s: 12px; --radius-m: 20px; }
+.panel, .card { border-radius: 22px; }
+.welcome-shell { min-height: 100dvh; display: grid; place-items: center; padding: 32px 20px; background: radial-gradient(ellipse at top left, #e4f0f4, transparent 65%), var(--paper); }
+.welcome-content { width: min(880px, 100%); }
+.welcome-content h1 { font-size: clamp(32px, 6vw, 48px); letter-spacing: -0.035em; }
+.welcome-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.welcome-options .panel, .patient-entrance { padding: clamp(20px, 4vw, 36px); box-shadow: 0 8px 32px rgba(15, 42, 68, .06); }
+.welcome-shell .btn { min-height: 48px; white-space: normal; }
+.patient-entrance { width: min(520px, 100%); }
+@media (max-width: 600px) { .welcome-options { grid-template-columns: 1fr; } }

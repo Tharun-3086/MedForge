@@ -7,8 +7,7 @@ const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
-  // `npm run typecheck` checks types; a type nit must never block a demo build.
-  typescript: { ignoreBuildErrors: true },
+  typescript: { ignoreBuildErrors: false },
   eslint: { ignoreDuringBuilds: true },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${backend}/:path*` }];

@@ -256,6 +256,11 @@ def care_passport(db: Session, clinic: Clinic, patient: Patient) -> dict[str, An
                                                    SourceArtifact.source_type != "VOICE_NOTE",
                                                    SourceArtifact.deleted_at.is_(None))
                       .order_by(SourceArtifact.created_at.desc()).limit(10)).all()
+    document_proposals = db.scalars(select(ExtractionProposal).where(
+        ExtractionProposal.patient_id == patient.id,
+        ExtractionProposal.clinic_id == clinic.id,
+        ExtractionProposal.artifact_id.in_([d.id for d in docs]))).all() if docs else []
+    document_status = {p.artifact_id: p.status for p in document_proposals}
     msgs = db.scalars(select(OutboundMessage).where(OutboundMessage.patient_id == patient.id,
                                                     OutboundMessage.status != MessageStatus.SCHEDULED)
                       .order_by(OutboundMessage.created_at.desc()).limit(5)).all()
@@ -277,7 +282,8 @@ def care_passport(db: Session, clinic: Clinic, patient: Patient) -> dict[str, An
         "appointments": appointments_for(db, clinic, patient.id),
         "requests": [S.request_dict(r) for r in requests],
         "you_told_us": you_told_us,
-        "documents": [{"filename": d.filename, "uploaded_at": S.iso(d.created_at)} for d in docs],
+        "documents": [{"filename": d.filename, "uploaded_at": S.iso(d.created_at),
+                       "status": document_status.get(d.id, "RECEIVED")} for d in docs],
         "messages": [{"kind": m.kind, "status_label": S.STATUS_LABEL.get(m.status), "at": S.iso(m.created_at),
                       "channel": m.channel} for m in msgs],
         "consents": consent_state(db, patient.id),
