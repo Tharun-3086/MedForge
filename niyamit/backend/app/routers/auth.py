@@ -93,12 +93,13 @@ def demo_users(db: Session = Depends(get_db)) -> dict:
     """Demo mode only: one-click sign-in buttons for the synthetic accounts."""
     if not settings.demo_mode:
         raise HTTPException(404, "Not found.")
-    from app.seed import DEMO_PASSWORD
+    from app.seed import DEMO_PASSWORD, STAFF_A, STAFF_B
     from app.services.demo import SANDBOX_PREFIX
 
     rows = db.execute(select(User, Membership, Clinic).join(Membership, Membership.user_id == User.id)
                       .join(Clinic, Clinic.id == Membership.clinic_id)
-                      .where(Clinic.is_synthetic.is_(True), Clinic.name.not_like(f"{SANDBOX_PREFIX}%"))
+                      .where(Clinic.is_synthetic.is_(True), Clinic.name.not_like(f"{SANDBOX_PREFIX}%"),
+                             User.email.in_([row[0] for row in STAFF_A + STAFF_B]))
                       .order_by(Clinic.name.desc(), Membership.role)).all()
     return {"password": DEMO_PASSWORD,
             "users": [{"email": u.email, "name": u.name, "role": m.role, "clinic": c.short_name} for u, m, c in rows]}

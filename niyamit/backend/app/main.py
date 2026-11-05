@@ -18,7 +18,7 @@ from app.context import correlation_id, new_correlation_id
 from app.db import engine
 from app.enums import InvalidTransition
 from app.logging_setup import setup_logging
-from app.routers import auth, demo, evals, intake, patient_app, staff, webhooks
+from app.routers import auth, demo, evals, intake, patient_app, staff, staff_access, webhooks
 from app.storage import StorageUnavailable
 
 log = logging.getLogger("niyamit.api")
@@ -94,5 +94,5 @@ def healthz() -> dict:
 
 
 for r in (auth.router, staff.router, intake.router, patient_app.router, patient_app.caregiver_router,
-          demo.router, evals.router, webhooks.router):
+            demo.router, evals.router, webhooks.router, staff_access.router):
     app.include_router(r)

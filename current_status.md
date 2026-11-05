@@ -1,3 +1,20 @@
+# Latest local update — staff onboarding and mobile roles
+
+The original release was pushed and merged by the user. New work is on `feature/clinic-staff-onboarding` and has not been committed or pushed by the assistant.
+
+- 125 backend tests passed; updated frontend type checking and production build passed.
+- Clinic administrators can invite ordinary staff, who set their own passwords; invitations expire and are single-use. Admins can revoke access immediately.
+- Private non-demo clinic provisioning creates an initial admin and draft message templates. Real-clinic patients are not marked synthetic or allowed through development OTP.
+- Patient registration is available in the clinic UI, with consent unchecked by default.
+- One responsive app supports Patient and Clinic entry points, mobile clinic quick navigation and backend-enforced roles.
+- Confirmation and difficulty actions passed locally. Listen now has loading feedback and a visible player for browsers that block automatic playback. Errors are visible on the difficulty screen.
+- Public HTTPS retest passed on the replacement tunnel: patient OTP, report scanning, clinic review, staff invitation/acceptance, patient registration and immediate staff revocation. See TESTING.md for details.
+- Real SMS, account recovery, production hosting/security/clinical approval and physical microphone acceptance remain outstanding.
+
+See `niyamit/README.md`, `niyamit/TESTING.md` and `niyamit/DEPLOYMENT.md` for current instructions, including database inspection.
+
+---
+
 # Release status — 2026-11-05
 
 ## Ready for GitHub and local demo deployment
@@ -22,7 +39,7 @@ GitHub-hosted CI has not run yet because nothing has been pushed. Manual emulato
 
 Real SMS OTP integration, clinical/native-language approval, production account provisioning, HTTPS/infrastructure/security review, backup restore rehearsal and real-device acceptance remain required. The supplied Compose file uses public demo credentials and is for synthetic data. See [deployment gates](niyamit/DEPLOYMENT.md).
 
-## Publish this branch yourself
+## Historical release publishing commands (already completed by the user)
 
 From PowerShell:
 

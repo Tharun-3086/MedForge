@@ -1,7 +1,7 @@
 {
   "name": "Niyamit Care Bridge",
   "short_name": "Niyamit",
-  "description": "Your diabetes follow-ups, in your language.",
+  "description": "Patient care and clinic coordination in one app.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F2F5F7",

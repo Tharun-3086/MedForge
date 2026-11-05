@@ -42,3 +42,24 @@ Final backend/build verification results are recorded in `../current_status.md`.
 9. Restart the services and verify existing records/originals survive. Rehearse backup restoration in a separate environment before real deployment.
 
 Do not mark manual microphone, real SMS/WhatsApp, handwriting accuracy, external production deployment or clinical approval complete based on automated tests.
+
+## Staff onboarding and shared mobile app verification (2026-11-05)
+
+The backend suite now passes **125 tests**. Added coverage verifies admin-only invitations, allowed roles, hashed single-use tokens, expiration/cancellation/reissue, cross-clinic denial, immediate session revocation, draft templates for new clinics and real-clinic patient exclusion from development OTP.
+
+A local browser run passed admin invitation creation, recipient password setup/login, staff role restriction, patient registration with consent unchecked and immediate access revocation. Mobile clinic navigation and shared Patient/Clinic entry were checked at 393px width. Confirmation and difficulty actions completed; Listen returned audio and the visible player loaded it. Physical speaker/microphone acceptance remains manual.
+
+The public Cloudflare patient report workflow passed earlier in this session. The old temporary hostname subsequently stopped resolving; final updated UI checks are local until a new tunnel URL is supplied. No new Git push was performed.
+
+## Public HTTPS retest — 2026-11-05
+
+After the laptop restart, the new Cloudflare tunnel was verified and PUBLIC_APP_URL updated locally. Both browser workflows passed over the public HTTPS origin:
+
+- Development patient OTP login, wrong-code rejection and staff-access separation.
+- Synthetic prescription upload, original download and unverified analysis before review (Tesseract OCR plus configured Sarvam extraction).
+- Clinic field correction and plan approval through the UI; patient sees the preserved automatic value separately from the reviewed value; logout denies original access.
+- Administrator creates a role-specific invitation on the correct public hostname; recipient sets a password and signs in; non-admin staff cannot manage invitations.
+- New staff registers a synthetic patient through the UI with reminder consent unchecked by default.
+- Admin revokes the test staff membership; the existing session immediately loses patient access.
+
+No real SMS was sent and no physical microphone/emulator hardware test was performed. Test staff access was revoked after verification. Synthetic QA records remain identifiable by their QA names. No Git commit or push was performed.

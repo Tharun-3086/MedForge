@@ -169,7 +169,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--t
 .menu-btn { display: none; }
 
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 14px; gap: 10px; }
   .rail .nav, .rail .rail-foot { display: none; }
   .rail.open .nav, .rail.open .rail-foot { display: grid; width: 100%; }
@@ -399,3 +399,14 @@ dialog.modal::backdrop { background: rgba(15, 42, 68, 0.35); }
 .welcome-shell .btn { min-height: 48px; white-space: normal; }
 .patient-entrance { width: min(520px, 100%); }
 @media (max-width: 600px) { .welcome-options { grid-template-columns: 1fr; } }
+
+/* One mobile app, with role-specific clinic navigation. */
+.clinic-mobile-nav { display: none; }
+@media (max-width: 900px) {
+ .clinic-mobile-nav { display: flex; justify-content: space-around; gap: 4px; position: fixed; z-index: 30; bottom: 0; left: 0; right: 0; padding: 10px 8px calc(10px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--rule); border-radius: 20px 20px 0 0; box-shadow: 0 -4px 20px #17324e0a; }
+ .clinic-mobile-nav a { padding: 12px 5px; font-size: 13px; text-decoration: none; border-radius: 12px; }
+ .clinic-mobile-nav a[aria-current] { background: var(--teal-wash); font-weight: 700; }
+ .shell .page { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
+ .shell .spread { flex-wrap: wrap; }
+ .shell .panel { overflow-wrap: anywhere; }
+}

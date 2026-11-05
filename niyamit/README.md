@@ -115,3 +115,19 @@ See [TESTING.md](TESTING.md), [DEPLOYMENT.md](DEPLOYMENT.md) and [../SECURITY.md
 ## Current limitations
 
 Real SMS OTP is not implemented; do not enable development OTP for real patients. Live speech/translation require provider credentials, connectivity and consent. Real WhatsApp delivery and native Android packaging are not release-verified. Clinical and native-language template approval, production infrastructure/security review, backup restore rehearsal and physical microphone testing remain launch gates. No regulatory certification or medical accuracy claim is made.
+
+## Clinic patient registration and staff approval
+
+Clinic users open **Patients → Add patient** to register a patient. Consent boxes start unchecked and must reflect the patient's actual agreement. A patient inherits the clinic's synthetic/real status; development OTP cannot authenticate a real-clinic patient.
+
+A clinic **administrator** opens **Settings → Clinic staff access**, enters the new staff member's name/email, selects Nurse, Doctor or Reception, and creates an invitation. Privately share the generated link with the verified intended person. No email is sent automatically. The link expires in 24 hours, works once, and lets the recipient choose their own password before signing in at `/login`. Reissuing an invitation invalidates the previous one. Admins can cancel pending invitations and revoke ordinary staff access immediately, including existing sessions. Other roles cannot manage staff. Administrator/operator privileges cannot be granted or removed through this screen.
+
+Existing-account clinic transfers, password recovery and administrator succession are not implemented. The public demo still uses synthetic clinics and public demo credentials; do not use it for real clinic identities or patient information.
+
+For a new non-demo clinic, see the private provisioning command in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## One app on mobile
+
+Open `/` to choose Patient or Clinic in the same application. Patient and staff sessions remain separate, and backend permissions determine access. Clinic mobile screens include quick navigation for Today, Patients, Reports and Tasks (filtered by role), plus a full Menu and Switch app link. The manifest launches the shared entry point. This is a responsive web app/home-screen experience, not a native Android APK or an offline medical-record store.
+
+Patient Listen now shows audio preparation status and a player with manual Play/Pause controls if the browser blocks automatic playback. Reply action errors are visible on all patient views, including difficulty selection. The original confirmation and barrier workflows remain server-validated.

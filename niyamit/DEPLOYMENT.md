@@ -40,7 +40,7 @@ Store backups outside the repository with restricted access. Restore into an iso
 - Implement and verify an SMS OTP provider; development OTP is blocked in production. Until then phone OTP must be disabled, not disguised as SMS.
 - Use a managed secret store, a fresh strong secret, unique database credentials and least-privilege database users. The supplied Compose database password is demo-only.
 - Set `APP_ENV=production`, `DEMO_MODE=false`, `PATIENT_OTP_PROVIDER=disabled`, `COOKIE_SECURE=true`, and an HTTPS `PUBLIC_APP_URL`. Startup rejects unsafe combinations.
-- Provision real clinic/staff accounts through an approved administrative process; do not seed demo accounts into a production database. A production onboarding CLI is not included.
+- Provision real clinic/staff accounts through an approved administrative process; do not seed demo accounts into a production database. Use the private provisioning command below; never expose it as public self-registration.
 - Deploy behind a trusted HTTPS reverse proxy, expose only required public ports, and validate proxy/rate-limit configuration. Build the frontend with the correct internal API URL.
 - Keep one scheduler instance; the demo Celery worker embeds beat (`-B`) and must not be blindly replicated. Separate scheduling before scaling workers.
 - Establish monitoring for API health, queue failures, disk capacity, provider timeouts and backup failures. Redact personal information and credentials from logs.
@@ -48,3 +48,37 @@ Store backups outside the repository with restricted access. Restore into an iso
 - Test real SMS, real microphone/camera, provider failures, recovery and backup restoration in the target environment.
 
 These are explicit outstanding release gates, not work silently claimed as completed. No remote deployment or Git push is performed by these instructions.
+
+## Provision a clinic and its first administrator
+
+Run only in an isolated deployment after the production gates above are satisfied. Do not convert the shared public demo database into a production clinic. Configure `DEMO_MODE=false` and disable development OTP first. The command checks startup configuration and refuses demo mode. It never overwrites an existing account or clinic.
+
+```powershell
+docker compose exec backend python -m app.bootstrap_clinic --name "Example Clinic" --short-name "Example" --admin-email "owner@example.com" --admin-name "Clinic Owner"
+```
+
+Replace example details with the verified clinic administrator's information. The command prompts privately for a password and confirmation; do not put the password in command arguments. It creates a non-synthetic clinic, one administrator and **draft** message templates. An authorized reviewer must approve wording before messaging. The administrator can then invite ordinary staff from Settings. No email verification/delivery or real SMS is added by this command; complete those production requirements separately.
+
+## Inspect the database without exposing it publicly
+
+On the Docker host, enter `niyamit/` and run:
+
+```powershell
+docker compose exec db psql -U niyamit -d niyamit
+```
+
+Inside psql, use a read-only transaction:
+
+```sql
+BEGIN READ ONLY;
+\dt
+SELECT id, name, is_synthetic FROM clinics;
+SELECT count(*) AS patients FROM patients;
+SELECT count(*) AS staff_accounts FROM users;
+ROLLBACK;
+\q
+```
+
+These credentials are for the supplied demo Compose stack. Use the configured database user on a real deployment. PostgreSQL lives in a container, but its data lives in the `pgdata` named volume. A normal container rebuild/restart preserves it; deleting volumes does not. Uploads live separately in `appdata` and need their own backup plus the encryption key.
+
+On a remote host, SSH into that host and run the same commands there. A GUI such as DBeaver/pgAdmin should connect through a private network or SSH tunnel with restricted credentials. Do not publish PostgreSQL port 5432 through the public app tunnel. The HTTPS demo URL exposes the web app, not a database management interface.

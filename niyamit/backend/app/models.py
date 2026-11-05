@@ -83,6 +83,20 @@ class User(Base):
     memberships: Mapped[list[Membership]] = relationship(back_populates="user", lazy="selectin")
 
 
+class StaffInvitation(Base):
+    __tablename__ = "staff_invitations"
+    id: Mapped[uuid.UUID] = pk()
+    clinic_id: Mapped[uuid.UUID] = clinic_fk()
+    email: Mapped[str] = mapped_column(String(200))
+    name: Mapped[str] = mapped_column(String(120))
+    role: Mapped[str] = mapped_column(String(20))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = created()
+
+
 class Membership(Base):
     __tablename__ = "memberships"
     __table_args__ = (UniqueConstraint("user_id", "clinic_id"),)
