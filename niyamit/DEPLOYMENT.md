@@ -1,5 +1,8 @@
 # Deployment and operations
 
+For an independent server-hosted synthetic demo with HTTPS, use [HOSTED_DEMO.md](HOSTED_DEMO.md) and the standalone compose.hosted.yml file. Only its proxy publishes host ports. Demo subscriptions collect no money; see [BILLING.md](BILLING.md).
+
+
 ## Supported release deployment
 
 The included Compose stack is a **single-host synthetic-data demo/development deployment**. It is reproducible from source and does not depend on another laptop or Baidu. It is not a publicly exposed real-patient production configuration.

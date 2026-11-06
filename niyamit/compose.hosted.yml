@@ -1,0 +1,106 @@
+# Niyamit Care Bridge: the whole demo on one laptop.
+#
+#   cp backend/.env.example backend/.env      # then paste your keys into backend/.env
+#   docker compose up --build
+#
+# Open http://localhost:3000 (API docs: http://localhost:8000/v1/docs).
+name: niyamit-hosted-demo
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://niyamit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.hosted}@db:5432/niyamit
+  REDIS_URL: redis://redis:6379/0
+  STORAGE_DIR: /data/artifacts
+
+x-backend-env-file: &backend-env-file
+  - path: ./backend/.env
+    required: false  # without it the app still runs, offline (no AI keys)
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: niyamit
+      POSTGRES_USER: niyamit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.hosted}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U niyamit -d niyamit"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: *backend-env-file
+    environment: *backend-env
+    # Create or upgrade the tables, add the synthetic demo data on first start only, then serve the API.
+    command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - appdata:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build: ./backend  # same image as the backend; the layer cache makes the second build instant
+    env_file: *backend-env-file
+    environment: *backend-env
+    # Sends reminders, processes replies and documents, retries stuck jobs; -B runs the 15-second scheduler.
+    command: celery -A app.worker worker -B --loglevel=INFO --concurrency=2
+    volumes:
+      - appdata:/data
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_INTERNAL_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.hosted}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  caddydata:
+  caddyconfig:
+  pgdata:
+  appdata:

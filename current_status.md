@@ -1,3 +1,13 @@
+# Latest update: demo subscriptions and hosted deployment
+
+Clinic admins can select illustrative INR/month plans based on current active follow-up patients, with persistent SIMULATED_NO_PAYMENT history. No merchant account, tax invoice, charge or automatic renewal is implemented. Care records remain accessible. Activation is disabled outside demo mode.
+
+Both READMEs were rewritten. BILLING.md defines usage/prices; HOSTED_DEMO.md and compose.hosted.yml provide a server-hosted HTTPS demo configuration independent of the laptop. Compose/Caddy config validation passed. Real server deployment and production acceptance remain outstanding. Backend suite: 134 tests passed.
+
+No assistant Git commit or push was performed for these changes.
+
+---
+
 # Latest local update — staff onboarding and mobile roles
 
 The original release was pushed and merged by the user. New work is on `feature/clinic-staff-onboarding` and has not been committed or pushed by the assistant.

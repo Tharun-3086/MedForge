@@ -71,3 +71,9 @@ No real SMS was sent and no physical microphone/emulator hardware test was perfo
 Mobile report cards and first-use tour checked at 390px width: no page overflow, labelled report rows, desktop table preserved, Skip/completion persistence/replay passed. This is browser viewport testing; physical iPhone Safari acceptance remains manual.
 
 Immediate clinic signup tests cover creation of an isolated empty clinic, administrator permissions, draft templates, password login, duplicate prevention, invalid passwords and preservation of existing accounts. Live SMS login was confirmed by the user on 2026-11-06 after rotating/configuring the Twilio token.
+
+## Demo billing and hosted deployment — 2026-11-06
+
+Full backend suite: 134 passed (one existing test-client deprecation warning). Billing coverage checks admin permissions, tenant isolation, server-side price selection, duplicate-selection suppression and non-demo activation denial. Frontend TypeScript check passed. Hosted Compose and Caddy configurations validated locally; no real domain/server deployment or certificate issuance has been performed.
+
+Mobile browser billing acceptance passed: administrator selects Starter, no-payment labels are visible, selection/history persist after reload, and the page has no horizontal overflow. Updated Docker production build passed. No real payment was attempted.

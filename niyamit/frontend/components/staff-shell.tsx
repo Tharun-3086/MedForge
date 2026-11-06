@@ -34,6 +34,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     group: "Clinic",
     items: [
       { href: "/metrics", label: "Metrics", perm: "metrics" },
+      { href: "/billing", label: "Subscription", perm: "settings" },
       { href: "/settings", label: "Settings", perm: null },
       { href: "/audit", label: "Audit log", perm: "audit" },
     ],

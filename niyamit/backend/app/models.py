@@ -83,6 +83,15 @@ class User(Base):
     memberships: Mapped[list[Membership]] = relationship(back_populates="user", lazy="selectin")
 
 
+class ClinicSubscription(Base):
+    __tablename__ = "clinic_subscriptions"
+    clinic_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("clinics.id"), primary_key=True)
+    plan_key: Mapped[str] = mapped_column(String(30))
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    invoices: Mapped[list[dict]] = mapped_column(JSONType, default=list)
+
+
 class StaffInvitation(Base):
     __tablename__ = "staff_invitations"
     id: Mapped[uuid.UUID] = pk()
