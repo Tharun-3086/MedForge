@@ -22,15 +22,20 @@ def remote(monkeypatch):
     return install
 
 
-def test_remote_roundtrip_encrypted_and_private(remote, tmp_path, monkeypatch):
+@pytest.mark.parametrize("api_key", ["test-server-only-key", "sb_secret_test-server-only-key"])
+def test_remote_roundtrip_encrypted_and_private(remote, tmp_path, monkeypatch, api_key):
     monkeypatch.setattr(settings, "storage_dir", str(tmp_path))
+    monkeypatch.setattr(settings, "supabase_service_role_key", api_key)
     objects = {}
     requests = []
 
     def handler(request):
         requests.append(request)
-        assert request.headers["authorization"] == "Bearer test-server-only-key"
-        assert request.headers["apikey"] == "test-server-only-key"
+        if api_key.startswith("sb_secret_"):
+            assert "authorization" not in request.headers
+        else:
+            assert request.headers["authorization"] == f"Bearer {api_key}"
+        assert request.headers["apikey"] == api_key
         key = request.url.path.replace("/authenticated/", "/")
         if request.method == "POST":
             assert request.headers["content-type"] == "application/octet-stream"

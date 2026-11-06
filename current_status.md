@@ -1,3 +1,21 @@
+# Live Render acceptance: patient upload and clinic review
+
+Live URLs: https://niyamit-app.onrender.com (frontend), https://medforge-rg8q.onrender.com (API). Tested with fictional patients and generated documents only. Health, real clinic login, secure session cookies, patient access-link login, correct public link origin, image upload through mobile UI, Tesseract readings (BP 120/80 mmHg, fasting glucose 110 mg/dL, HbA1c 6.2%), private original download, clinic date correction and follow-up plan approval through UI, patient results with immutable automatic values separate from reviewed information, cross-clinic/patient denial and CSRF protection passed. Image upload plus processing took 8.6 seconds for the generated 1600x1000 test image; this is a sample measurement, not a performance guarantee.
+
+SMS delivery and real OTP sign-in were explicitly deferred by the user. Live OTP configuration reports available=true/development=false; invalid random challenges return 401, but this does not prove SMS delivery or valid-code login. No SMS was sent. Voice, AI translation quality, restart persistence and reminder timing were not tested in this pass.
+
+Found a live clinic UI defect: health-reading corrections used date inputs, and corrected numeric history was passed to date formatting. Fixed locally: date inputs remain for document/follow-up dates; other values accept text/units; history uses the field display formatter. Type checking and a production build passed. BP, glucose and HbA1c corrections were exercised in the local production frontend against the live API; patient reviewed values/latest readings updated and retained separate originals. A generated prescription PDF also uploaded, extracted via its text layer, and downloaded unchanged. These local frontend fixes are NOT deployed; the assistant did not commit or push. The earlier modern Supabase secret-key compatibility changes are also still local; origin/main remains b6b57ec at time of verification.
+
+Verification scripts/results/screenshots are outside Git under D:/niyamit/verification. Preserve synthetic QA records as test evidence; do not treat them as real clinical records.
+
+---
+
+# Latest local fix: modern Supabase secret keys
+
+Storage now sends modern sb_secret_ keys on the apikey header only; legacy service_role JWTs retain Bearer compatibility. The existing SUPABASE_SERVICE_ROLE_KEY setting accepts either format. Deployment guidance now recommends modern secret keys and retiring exposed legacy credentials. This compatibility fix is not committed or pushed by the assistant.
+
+---
+
 # Latest update: Render Free and private Supabase storage
 
 Prepared an opt-in Supabase Storage adapter: originals remain Fernet-encrypted, downloads use the authenticated private-object API, and upload failures never fall back to ephemeral disk. Local storage remains the default. Object keys are validated; remote errors return a generic 503 without credentials/provider details.

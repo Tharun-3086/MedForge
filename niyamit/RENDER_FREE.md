@@ -11,7 +11,7 @@ This is a synthetic-data demo. Free hosting sleeps and has resource/usage limits
 3. Disable the project's **Data API** in its Data API integration/settings. Niyamit accesses PostgreSQL through its backend, not the Supabase database REST/GraphQL API. Leave Storage enabled. Startup additionally enables RLS and removes `PUBLIC`, `anon`, and `authenticated` grants on Niyamit tables. No browser RLS policies are required. This does not modify Supabase's auth/storage tables.
 4. In **Connect**, select **Session pooler**, IPv4, port **5432**. Copy its exact hostname and `postgres.PROJECT_REF` username. Do not guess the regional hostname or use transaction-pooler port 6543.
 5. For `DATABASE_URL`, change `postgresql://` to `postgresql+psycopg://`, insert the database password with reserved characters percent-encoded, and append `?sslmode=require` (or `&sslmode=require` if parameters already exist). This is the database password, not an API key.
-6. Find the project URL and **legacy `service_role` API key** in project API settings/API Keys. Use the service role key for `SUPABASE_SERVICE_ROLE_KEY`, not the `anon`/publishable key or a personal access token. The backend sends it as Bearer authorization plus `apikey` to Storage. Never place it in frontend variables, an APK, screenshots, Git, or chat.
+6. Find the project URL and **secret API key (`sb_secret_...`)** in project API settings/API Keys. Use the new secret key for the existing setting `SUPABASE_SERVICE_ROLE_KEY`, not an anon/publishable key or personal access token. The backend sends modern keys only on the `apikey` header; legacy JWT keys also use Bearer authorization. If a legacy key was exposed, replace it and retire the compromised key using https://supabase.com/docs/guides/security/rotate-leaked-api-keys . Never place it in frontend variables, an APK, screenshots, Git, or chat.
 
 Keep these values private; enter them directly in Render's Environment screen. The Supabase project URL itself is public, but its keys and connection string are secrets.
 
@@ -64,7 +64,7 @@ Use `backend/.env.render.example` as the environment-variable reference. Enter *
 | `SECRET_KEY` | New random secret, at least 32 characters; save it securely and keep it stable |
 | `DATABASE_URL` | Supabase session-pooler URI with `postgresql+psycopg` and TLS |
 | `SUPABASE_URL` | Your project's HTTPS origin, without `/storage` or other paths |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only legacy `service_role` key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only secret API key (`sb_secret_...`) |
 | `PUBLIC_APP_URL` | Frontend HTTPS URL once created; temporary placeholder must be replaced before testing patient links |
 
 Generate the secret locally, then paste it only into Render:
