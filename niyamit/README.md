@@ -4,6 +4,8 @@ Patient care and clinic coordination in one responsive web application. The shar
 
 ## Free hosted demo
 
+For a three-minute patient OTP, report scan and clinic-review recording, follow [DEMO_VIDEO.md](DEMO_VIDEO.md). It includes narration and clearly synthetic report fixtures.
+
 See [RENDER_FREE.md](RENDER_FREE.md) for Render Free with Supabase PostgreSQL and a private encrypted `niyamit-artifacts` bucket. The profile runs migrations and synthetic seeding before starting one API process. Free services sleep; it is a demo, with hosted acceptance still required. Local Docker storage remains the default.
 
 ## Features

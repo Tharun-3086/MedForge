@@ -132,14 +132,15 @@ def otp_config():
 
 @router.post("/otp/request")
 def otp_request(body: OtpRequestIn, request: Request, db: Session = Depends(get_db)):
-    rate_limit(f"otp-request:{client_ip(request)}", 10, 3600)
-    rate_limit(f"otp-phone:{patient_otp.digest(patient_otp.phone_number(body.phone))}", 5, 3600)
-    return patient_otp.request_code(db, body.phone)
+    # The narrow phone quota and cooldown are persistent and count successful sends only.
+    # A generous shared-network backstop avoids treating a clinic/proxy as one patient.
+    return patient_otp.request_code(db, body.phone,
+        before_send=lambda: rate_limit(f"otp-send-ip:{client_ip(request)}", 120, 3600))
 
 
 @router.post("/otp/verify")
 def otp_verify(body: OtpVerifyIn, request: Request, response: Response, db: Session = Depends(get_db)):
-    rate_limit(f"otp-verify:{client_ip(request)}", 30, 300)
+    rate_limit(f"otp-verify:{client_ip(request)}", 300, 300)
     matches = patient_otp.verify_code(db, body.phone, body.challenge_id, body.code)
     response.delete_cookie(PATIENT_COOKIE, path="/")
     response.delete_cookie("nyt_patient_choice", path="/")
