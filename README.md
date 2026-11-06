@@ -1,32 +1,34 @@
 # Niyamit Care Bridge
 
-Connected patient and clinic interfaces for follow-up care, messages, voice replies and prescription/report review. Next.js frontend, FastAPI API, PostgreSQL, Redis and Celery run together on one machine with Docker Compose.
+One responsive application for patients and clinics: SMS OTP, prescription/report scanning, clinic review, follow-ups, multilingual messages, voice replies and clinic onboarding.
 
-**Release scope:** runnable synthetic-data demo and development deployment. Real-patient production launch is not approved: SMS OTP integration, clinical/language review and operational security acceptance remain required. No real SMS is sent by development OTP.
+**Current release: deployable synthetic-data demo.** Twilio SMS login has been tested by the user. Subscriptions simulate billing and collect no money. Real-patient production requires the acceptance gates in the deployment guide.
 
-## Start
+## Start locally
 
-Install Docker Desktop with Linux containers, then run from this repository:
+Install Docker Desktop with Linux containers. From this repository:
 
 ```powershell
 cd niyamit
 Copy-Item backend/.env.example backend/.env
-# Edit backend/.env locally; generate a random SECRET_KEY before uploading files.
+```
+
+Copy only on first setup; preserve existing configuration. Generate a private random SECRET_KEY and save it in backend/.env, then:
+
+```powershell
 docker compose up -d --build --wait
 ```
 
-On Linux/macOS use `cp backend/.env.example backend/.env`. Do not overwrite an existing configured `.env`.
-
-Open [Niyamit](http://localhost:3000), [patient login](http://localhost:3000/patient), or [clinic login](http://localhost:3000/login). Demo staff: `nurse@sunrise.demo`, password `niyamit-demo`. Synthetic patient phone: `+919000000101`; use the explicitly labelled development code shown on screen.
+Open http://localhost:3000/ and choose Patient or Clinic. Linux/macOS users use `cp` instead of `Copy-Item`.
 
 ## Documentation
 
-- [Complete app guide](niyamit/README.md): setup, patient/clinic workflows, configuration and architecture.
-- [Deployment and operations](niyamit/DEPLOYMENT.md): deployment boundaries, persistence, backups and production checklist.
-- [Twilio SMS setup](niyamit/SMS_SETUP.md): real OTP integration, local credentials and database inspection.
-- [Testing](niyamit/TESTING.md): automated checks and manual acceptance steps.
-- [Security](SECURITY.md): secret handling and reporting.
-- [Optional Baidu OCR](niyamit/BAIDU_OCR.md): experimental only; Tesseract is the default.
-- [Current release status](current_status.md).
+- [Application guide](niyamit/README.md)
+- [Hosted HTTPS demo](niyamit/HOSTED_DEMO.md)
+- [Deployment and backups](niyamit/DEPLOYMENT.md)
+- [Demo subscriptions](niyamit/BILLING.md)
+- [Twilio and database inspection](niyamit/SMS_SETUP.md)
+- [Testing](niyamit/TESTING.md)
+- [Security](SECURITY.md)
 
-Source lives in `niyamit/`. GitHub Actions builds the Docker stack, runs backend tests, checks TypeScript and audits frontend production dependencies. CI results become available after you push; local results are recorded separately.
+Source lives in niyamit/. Pushing to GitHub does not host the app. A laptop tunnel depends on power and connectivity; server hosting runs independently. Never commit credentials, uploads, model weights or database dumps.

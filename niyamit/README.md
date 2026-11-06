@@ -1,101 +1,96 @@
 # Niyamit Care Bridge
 
-Niyamit connects a patient web app to a clinic workspace. Patients can sign in, upload reports, see extracted information, exchange messages and send voice replies. Clinic staff review the same records and explicitly confirm extracted fields and follow-up plans.
+Patient care and clinic coordination in one responsive web application. The shared entry page supports separate authenticated patient/staff sessions and backend clinic isolation. The home-screen manifest launches `/`; this repository does not contain a native APK or offline record store.
 
-## What works
+## Features
 
-- Separate patient and clinic entry points, with role and clinic access checks.
-- Phone login using **development OTP for synthetic records only**; clinic-issued links remain supported.
-- Patient dashboard with report/prescription upload, original-file access and analysis status.
-- Separate **automatic, unverified analysis** and **clinic-reviewed information**. AI extraction does not approve treatment or a care plan.
-- Clinic intake review, corrections, approved plans, follow-ups, booking requests and messaging.
-- Telugu/Hindi/English reply flows and English meaning display; live speech/translation depend on configured providers.
-- Encrypted uploaded artifacts, migrations, worker jobs, retries and automated tests.
-- Tesseract OCR by default. Baidu is optional experimental code, not required for startup.
+- Twilio Verify SMS login or clearly labelled development OTP. Development OTP opens synthetic records only and is rejected in production.
+- Immediate clinic-owner signup with administrator access and isolated records.
+- Role-specific staff invitations, private password setup and immediate access revocation.
+- Patient uploads, encrypted originals and separate automatic/clinic-reviewed results.
+- Clinic patients, tasks, report review, appointments, messages, settings and audit history.
+- Telugu/Hindi/English flows, English meanings and optional speech recognition/read-aloud with playback controls.
+- Tesseract OCR by default; optional Baidu code is experimental.
+- Mobile report cards, clinic quick navigation, first-use tour and a reduced-motion-aware logo intro.
+- Demo monthly clinic subscriptions in INR with active-patient usage and simulated billing history.
 
-## Quick start
+## First setup
 
-From the Git repository root:
+Install Docker Desktop with Linux containers. Enter niyamit/ from the Git root:
 
 ```powershell
-cd niyamit
 Copy-Item backend/.env.example backend/.env
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Paste the generated value into `SECRET_KEY` in `backend/.env`. Keep this file private. Do not change this key after storing documents unless you have preserved the encryption key and planned a migration.
+Copy only on first setup. Save the generated SECRET_KEY in backend/.env. Preserve encryption configuration after uploading files; changing it can make originals unreadable. Never commit credentials. Linux/macOS users substitute `cp`.
 
 ```powershell
 docker compose up -d --build --wait
 docker compose ps
 ```
 
-Docker Desktop must be running with Linux containers. Initial downloads require network access and disk space. Node/Python on the host are only needed for host-side development/checks. Linux/macOS users substitute `cp` for `Copy-Item`.
+Open http://localhost:3000/. API health: http://localhost:8000/healthz; docs: http://localhost:8000/v1/docs. Initial builds require downloads and disk space.
 
-Open http://localhost:3000. API health: http://localhost:8000/healthz; API documentation: http://localhost:8000/v1/docs.
+## Accounts
 
-## Try both sides
+Patients open `/patient` using their clinic-registered number. Development mode displays a test code without SMS; Twilio mode sends real SMS. Multiple profiles require a clinic choice. Phone verification does not automatically share records across clinics.
 
-1. Open `/login`, sign in as `nurse@sunrise.demo` with password `niyamit-demo`. Other demo roles include `doctor@sunrise.demo` and `admin@sunrise.demo` with the same password.
-2. In a separate browser context, open `/patient`. Enter synthetic phone `+919000000101`, request a test code and enter the code displayed on screen. **This is not SMS delivery.**
-3. Choose **Scan a report**, select the document type and upload a clear, synthetic PNG/JPEG/PDF. Use no real patient data in demo mode.
-4. Open **View analysis**, then **Refresh analysis** while the background job completes. Automatic extraction must be labelled unverified; the original remains available.
-5. In the clinic, review the pending intake for that patient. Correct a field, confirm the reviewed fields and approve the appropriate follow-up plan.
-6. Refresh the patient analysis. The clinic-confirmed result must appear separately from the original automatic extraction.
-7. Send a patient text reply, then check the same patient's clinic message history. Repeat with Telugu/Hindi; check the displayed English meaning against the intended message.
-8. For voice, allow browser microphone access and record a short sentence in a quiet room. Check transcription and meaning before treating it as correct. If recognition fails, retry or type the message.
+Owners open `/register-clinic` and choose a password of at least 12 characters. They become ADMIN immediately. Demo clinics remain synthetic; templates start as drafts. Signup does not verify email ownership or professional credentials.
 
-The patient must already have a clinic record. Development OTP cannot open non-synthetic records. If the same phone belongs to multiple clinic profiles, the patient chooses the intended clinic explicitly.
+Admins invite Nurse/Doctor/Reception staff from Settings > Clinic staff access. Links expire after 24 hours and work once. Recipients set their password and sign in at `/login`. No email is automatically sent. Staff should accept an invitation rather than create another clinic. Existing-account transfers, administrator succession and account recovery are not implemented.
 
-## Android emulator
+Public synthetic demo accounts use password `niyamit-demo`:
 
-This repository provides a responsive **web app**, not a native Android APK. Open it in emulator Chrome.
+| Role | Email |
+| --- | --- |
+| Admin | admin@sunrise.demo |
+| Nurse | nurse@sunrise.demo |
+| Doctor | doctor@sunrise.demo |
 
-```powershell
-& "D:\Android\Sdk\platform-tools\adb.exe" reverse tcp:3000 tcp:3000
-```
+With development OTP, seeded phone +919000000101 is fictional, not a real SMS destination. Live SMS testing uses your verified phone against a fictional profile. Never upload real health information to a demo.
 
-Adjust the SDK path on another machine. Then type `http://localhost:3000/patient` directly in emulator Chrome; no patient link is needed for OTP login. Keep the clinic open at `http://localhost:3000/login` on your laptop. Re-run port reversal after restarting the emulator. Localhost is important for microphone permissions; an HTTP LAN IP may not permit recording. Physical microphone quality still needs a user test.
+## Connected acceptance test
+
+1. Use separate browser profiles for clinic and patient.
+2. Patient uploads a fictional prescription/report and opens its original/analysis.
+3. Clinic checks the same document, corrects a field and approves an appropriate plan.
+4. Patient refreshes and sees the original automatic value separately from reviewed information.
+5. Send multilingual messages and check originals/English meanings, especially dates, negation and urgency.
+6. Over HTTPS/localhost, allow microphone access, record a short sentence and check transcription. Test Listen and manual Play.
+7. Register another clinic, invite/revoke staff and check record isolation.
+8. Admin opens Subscription and simulates a plan selection. No money is collected.
+
+Extraction can contain errors. It does not diagnose conditions, establish medication safety or approve treatment. Physical-device acceptance differs from browser viewport/generated-audio checks.
 
 ## Configuration
 
-All server secrets belong in `backend/.env`, never `NEXT_PUBLIC_*`, Git, screenshots or logs.
-
 | Setting | Purpose |
 | --- | --- |
-| `OCR_PROVIDER=local` | Default local OCR; no Baidu service required |
-| `DOC_PROVIDER=local` | Deterministic local extraction; use this for an entirely offline document path |
-| `DOC_PROVIDER=sarvam` | Optional document understanding with a configured key; local extraction remains available |
-| `LLM_PROVIDER=rules` | Offline reply interpretation; limited language coverage |
-| `ASR_PROVIDER=none`, `TTS_PROVIDER=none` | Disable external speech services |
-| `SARVAM_API_KEY` | Optional live speech, translation/understanding and document provider |
-| `PATIENT_OTP_PROVIDER=development` | On-screen test codes, synthetic records only |
-| `PATIENT_OTP_PROVIDER=disabled` | Disable phone OTP when no SMS provider is configured |
-| `PUBLIC_APP_URL` | Address used when generating patient links |
-| `DEMO_MODE=true` | Synthetic accounts, simulated channel and test controls |
-| `SECRET_KEY` / `STORAGE_ENCRYPTION_KEY` | Authentication and artifact encryption; preserve securely with backups |
+| APP_ENV / DEMO_MODE | Demo versus guarded production startup |
+| SECRET_KEY / STORAGE_ENCRYPTION_KEY | Authentication/encryption keys; preserve with backups |
+| PUBLIC_APP_URL / COOKIE_SECURE | Generated links and HTTPS cookies |
+| PATIENT_OTP_PROVIDER | development, twilio or disabled |
+| TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_VERIFY_SERVICE_SID | Private SMS credentials |
+| OCR_PROVIDER=local | Tesseract/local reading |
+| DOC_PROVIDER=local | Local document extraction |
+| DOC_PROVIDER / LLM_PROVIDER | Optional external interpretation or local/rules fallback |
+| ASR_PROVIDER / TTS_PROVIDER | Optional speech providers; none disables them |
+| SARVAM_API_KEY / OPENAI_API_KEY | Server-only provider credentials |
+| WHATSAPP_ENABLED | Optional real channel; demo uses simulated messaging |
 
-Missing provider keys must not be represented as successful speech/translation. Tesseract works best on clear printed text; the image includes its default English language data. Handwriting, skewed photos, regional-script prescriptions and drug doses require careful human review. The application extracts information; it does not establish medical accuracy.
+Provider charges are separate from simulated subscription prices. Tesseract works best on clear printed text; bundled language data is English. Handwriting, regional-script documents and clinical interpretation require review. Provider failures must not be presented as successful speech/translation.
 
-## Architecture and source
+## Mobile and development
+
+Open the same app in mobile/emulator Chrome. Use `adb reverse tcp:3000 tcp:3000` for emulator localhost. This laptop's SDK is D:/Android/Sdk. Physical phones need the public HTTPS address. Laptop tunnels depend on laptop power/internet; see HOSTED_DEMO.md for independent hosting.
 
 ```text
-Browser / emulator Chrome
-  -> Next.js :3000 (patient + staff UI, /api proxy)
-     -> FastAPI :8000 -> PostgreSQL
-                     -> Redis -> Celery worker/scheduler
-                     -> encrypted artifact volume
-                     -> optional external AI/channel providers
+Browser/mobile -> Next.js app and /api proxy -> FastAPI
+ -> PostgreSQL, Redis/Celery, encrypted artifacts, optional providers
 ```
 
-- `frontend/app`: routes and responsive UI; `components/patient`: patient dashboard and analysis.
-- `backend/app/routers`: authenticated API routes.
-- `backend/app/services`: OTP, clinic workflows, messages and review logic.
-- `backend/app/ai`: provider adapters and local extraction.
-- `backend/alembic`: database migrations; `backend/tests`: isolated test suite.
-- `docker-compose.yml`: local demo stack; optional Baidu overlays are separate.
-
-## Development and verification
+Source is in frontend/app, frontend/components, backend/app/routers, services and ai. Migrations: backend/alembic. Tests: backend/tests. Laptop stack: docker-compose.yml. Hosted demo: compose.hosted.yml.
 
 ```powershell
 docker compose exec -T backend pytest -q
@@ -106,42 +101,10 @@ npm run build
 npm audit --omit=dev
 ```
 
-Run tests against disposable development infrastructure only. The test suite creates/resets a separate database ending in `_test`. Docker builds enforce TypeScript correctness; frontend dependency installation uses `npm ci`. Backend Docker dependencies are constrained by `backend/requirements.lock` (Linux/Python 3.13); regenerate and audit this snapshot deliberately when upgrading.
+Tests reset a separate database ending in _test; use development infrastructure. Provider tests run offline/mocked by default. Frontend Docker builds enforce TypeScript and npm ci; Python uses requirements.lock constraints for Linux/Python 3.13. For hot reload, stop the Compose frontend, set BACKEND_INTERNAL_URL=http://localhost:8000 and run npm run dev. Production rewrites are fixed at build time.
 
-For frontend hot reload, stop the Compose frontend and run `npm run dev` from `frontend`, setting `BACKEND_INTERNAL_URL=http://localhost:8000` in the shell. Keep the backend/worker/database running. API rewrite destinations are fixed at build time for production builds.
+## Deployment and limits
 
-See [TESTING.md](TESTING.md), [DEPLOYMENT.md](DEPLOYMENT.md) and [../SECURITY.md](../SECURITY.md) for acceptance and deployment details.
+See [HOSTED_DEMO.md](HOSTED_DEMO.md), [DEPLOYMENT.md](DEPLOYMENT.md), [BILLING.md](BILLING.md), [SMS_SETUP.md](SMS_SETUP.md) and [TESTING.md](TESTING.md).
 
-## Current limitations
-
-Twilio Verify SMS integration is implemented but requires configured credentials and live delivery acceptance; do not enable development OTP for real patients. Live speech/translation require provider credentials, connectivity and consent. Real WhatsApp delivery and native Android packaging are not release-verified. Clinical and native-language template approval, production infrastructure/security review, backup restore rehearsal and physical microphone testing remain launch gates. No regulatory certification or medical accuracy claim is made.
-
-## Clinic patient registration and staff approval
-
-Clinic users open **Patients → Add patient** to register a patient. Consent boxes start unchecked and must reflect the patient's actual agreement. A patient inherits the clinic's synthetic/real status; development OTP cannot authenticate a real-clinic patient.
-
-A clinic **administrator** opens **Settings → Clinic staff access**, enters the new staff member's name/email, selects Nurse, Doctor or Reception, and creates an invitation. Privately share the generated link with the verified intended person. No email is sent automatically. The link expires in 24 hours, works once, and lets the recipient choose their own password before signing in at `/login`. Reissuing an invitation invalidates the previous one. Admins can cancel pending invitations and revoke ordinary staff access immediately, including existing sessions. Other roles cannot manage staff. Administrator/operator privileges cannot be granted or removed through this screen.
-
-Existing-account clinic transfers, password recovery and administrator succession are not implemented. The public demo still uses synthetic clinics and public demo credentials; do not use it for real clinic identities or patient information.
-
-For a new non-demo clinic, see the private provisioning command in [DEPLOYMENT.md](DEPLOYMENT.md).
-
-## One app on mobile
-
-Open `/` to choose Patient or Clinic in the same application. Patient and staff sessions remain separate, and backend permissions determine access. Clinic mobile screens include quick navigation for Today, Patients, Reports and Tasks (filtered by role), plus a full Menu and Switch app link. The manifest launches the shared entry point. This is a responsive web app/home-screen experience, not a native Android APK or an offline medical-record store.
-
-Patient Listen now shows audio preparation status and a player with manual Play/Pause controls if the browser blocks automatic playback. Reply action errors are visible on all patient views, including difficulty selection. The original confirmation and barrier workflows remain server-validated.
-
-## Real SMS setup
-
-Twilio Verify is supported with local challenge limits and provider approval checks. See [SMS_SETUP.md](SMS_SETUP.md). No account credentials or live SMS delivery were available during automated testing. The default remains development OTP.
-
-## First-use tour and mobile reports
-
-A skippable three-step introduction appears once per browser profile and can be reopened through App tour. Reports use labelled cards below 700px; desktop keeps the table. Other clinic tables scroll within their container rather than squeezing words into single-character columns.
-
-## New clinic owner signup
-
-Clinic owners can open `/register-clinic` from the welcome or login page, enter clinic details and choose their administrator password. Signup immediately creates an isolated clinic and signs its owner in as ADMIN. It never joins an existing clinic or changes another account. In demo mode the new clinic is synthetic. Templates begin as drafts. Email addresses and professional credentials are not verified by signup.
-
-The new administrator opens Settings > Clinic staff access to invite doctors, nurses or reception staff. Staff use the private invitation to set their password, then sign in at `/login`; they do not create another clinic. Existing account transfers, email verification and password recovery remain separate outstanding work.
+The demo is deployable; it is not a certified real-patient production service. Remaining requirements include email verification/account recovery, clinical/native-language approval, real-device acceptance, restore rehearsal and operational/security acceptance. Real payments, tax invoices, refunds, proration and recurring charges are absent from demo subscriptions.
