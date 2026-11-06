@@ -117,6 +117,9 @@ def review_field(db: Session, staff: Staff, proposal: ExtractionProposal, field:
         field.status = FieldStatus.REJECTED
     elif action in ("APPROVE", "CORRECT"):
         new_value = (value if action == "CORRECT" else field.value) or ""
+        from app.services.health_readings import LABELS, valid_value
+        if field.name in LABELS and not valid_value(field.name,new_value):
+            raise HTTPException(422,"Enter the reading with explicit units, for example 120/80 mmHg, 110 mg/dL or 6.2 %.")
         if field.name in DATE_FIELDS:
             try:
                 date.fromisoformat(new_value)

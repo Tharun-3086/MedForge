@@ -426,3 +426,5 @@ dialog.modal::backdrop { background: rgba(15, 42, 68, 0.35); }
  .reports-table td[data-label="Status"] > .small, .reports-table td[data-label="Document"] > .small { grid-column: 2; }
  .reports-table td .btn { justify-self: start; }
 }
+
+.priority-card { padding:16px; border:1px solid var(--rule); border-radius:20px; min-width:0; overflow-wrap:break-word; }

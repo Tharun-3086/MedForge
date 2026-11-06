@@ -586,3 +586,9 @@ def caregiver_book(body: CaregiverBookIn, me: CaregiverPrincipal = Depends(curre
                                     idempotency_key=f"cg:{me.grant_id}:{req.id}:{slot_id}", created_by="CAREGIVER")
     db.commit()
     return _booking_response(db, clinic, req, result)
+
+
+@router.get("/health-readings")
+def health_readings(me: PatientPrincipal = Depends(current_patient), db: Session = Depends(get_db)):
+    from app.services.health_readings import latest
+    return latest(db,me.patient_id,me.clinic_id)

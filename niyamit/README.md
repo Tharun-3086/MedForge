@@ -1,6 +1,6 @@
 # Niyamit Care Bridge
 
-Patient care and clinic coordination in one responsive web application. The shared entry page supports separate authenticated patient/staff sessions and backend clinic isolation. The home-screen manifest launches `/`; this repository does not contain a native APK or offline record store.
+Patient care and clinic coordination in one responsive web application. The shared entry page supports separate authenticated patient/staff sessions and backend clinic isolation. The home-screen manifest launches `/`; the Android debug shell is documented below; offline records and iPhone builds are not implemented.
 
 ## Features
 
@@ -108,3 +108,34 @@ Tests reset a separate database ending in _test; use development infrastructure.
 See [HOSTED_DEMO.md](HOSTED_DEMO.md), [DEPLOYMENT.md](DEPLOYMENT.md), [BILLING.md](BILLING.md), [SMS_SETUP.md](SMS_SETUP.md) and [TESTING.md](TESTING.md).
 
 The demo is deployable; it is not a certified real-patient production service. Remaining requirements include email verification/account recovery, clinical/native-language approval, real-device acceptance, restore rehearsal and operational/security acceptance. Real payments, tax invoices, refunds, proration and recurring charges are absent from demo subscriptions.
+
+## Android debug APK
+
+A native Android shell now packages the existing patient and clinic web interface. See [android/README.md](android/README.md) for building, emulator setup, HTTPS configuration and limitations. It is a debug/test APK requiring the web backend, not a native UI rewrite or a store release.
+
+Android 10+ is supported by the shell. The SDK-only Windows build was executed and its APK signature verified; the Gradle wrapper checksums were verified but a full Gradle dependency build has not been executed. Camera, native file chooser, physical microphone and download behavior still need device acceptance. iPhone support is not implemented.
+
+On this laptop, from the Git root:
+
+```powershell
+cd niyamit/android
+.\build-debug.ps1
+& "D:\Android\Sdk\platform-tools\adb.exe" reverse tcp:3000 tcp:3000
+& "D:\Android\Sdk\platform-tools\adb.exe" install -r .\build\Niyamit-debug.apk
+```
+
+Start the emulator and Docker web stack first. Open Niyamit from the emulator app list. The default URL is localhost:3000 through adb reverse. A phone needs its own adb reverse connection or an APK configured for a reachable HTTPS origin. Build outputs and signing keys are ignored; publish source through Git, not a debug keystore or generated APK.
+
+## Latest patient health readings
+
+The patient dashboard retains latest BP, fasting/post-meal/random/unspecified glucose and HbA1c readings with units and source-report links. New OCR processing adds these values as individually reviewable fields. Older existing OCR text is considered as unverified fallback. Rejected/deleted/failed reports are excluded. New dated readings replace older values per measurement; a report missing BP does not erase prior BP. Undated readings do not replace an existing dated value. Unverified report dates are labelled; uploads are never represented as measurement dates. Ambiguous values, reference ranges and missing units are not guessed. Clinic corrections/approval update the reviewed label, independently of follow-up-plan approval. This is a source-linked summary, not diagnosis or guaranteed OCR accuracy.
+
+Readings refresh while the dashboard is open and can be refreshed manually. Inspect the original and verify the patient, date, value and units before using a number clinically. BP requires mmHg, glucose requires mg/dL or mmol/L, and HbA1c currently requires percent; values are not converted between units. Missing/unsupported readings remain absent rather than being filled with assumed normal values.
+
+## Clinic follow-up priority
+
+Today includes a patient priority panel: staff-flagged Urgent/High, Needs verification, staff-assessed Routine and Not assessed. Unverified OCR never automatically assigns clinical urgency or normality. No numeric medical thresholds are configured. Only Doctor/Nurse roles can set priority with a reason; Admin can view. Changes are audited and clinic-scoped.
+
+Readings and source review status are visible beside the patient. Routine is blocked while readings are unverified or processing. New/changed reports or readings flag a previous routine assessment for review; existing urgent/high priorities persist until staff changes them. This does not create an emergency alert, follow-up deadline or new care task. Existing doctor-task workflows remain separate. The list is paginated, urgent/high first across pages; category counts/filters refer to the current page. Missing readings or Not assessed must never be interpreted as normal health.
+
+To test, sign in as a synthetic doctor/nurse, open Today, select Assess priority for a patient and save a reason. Filter the current page by priority and verify the audit history. An administrator can view the panel but cannot assign a clinical priority through an administrator role. Reception/platform-operator roles cannot read this clinical panel. Review the source fields in Report inbox before assigning Routine.

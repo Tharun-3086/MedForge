@@ -77,3 +77,15 @@ Immediate clinic signup tests cover creation of an isolated empty clinic, admini
 Full backend suite: 134 passed (one existing test-client deprecation warning). Billing coverage checks admin permissions, tenant isolation, server-side price selection, duplicate-selection suppression and non-demo activation denial. Frontend TypeScript check passed. Hosted Compose and Caddy configurations validated locally; no real domain/server deployment or certificate issuance has been performed.
 
 Mobile browser billing acceptance passed: administrator selects Starter, no-payment labels are visible, selection/history persist after reload, and the page has no horizontal overflow. Updated Docker production build passed. No real payment was attempted.
+
+## Android APK — 2026-11-06
+
+SDK-only debug APK build and apksigner verification passed. Installed and launched on the API 37 emulator. WebView browser checks passed for welcome page, patient OTP interface, clinic password login and mobile role navigation. No new SMS was sent by this test. Native camera, file chooser interaction, physical microphone, downloads and real-device acceptance remain manual. Gradle wrapper checksums verified; a full Gradle dependency build has not been run. See android/README.md.
+
+## Latest health readings — 2026-11-06
+
+137 backend tests passed and the frontend production build/type check passed. Parser tests cover explicit units, glucose types, ambiguous duplicate readings, ranges and missing units. Summary tests cover report-date ordering, undated/older uploads, BP preservation, patient scoping and clinic corrections. Live browser acceptance uploaded two synthetic printed PNG reports through real Tesseract, checked automatic glucose update with BP retained, then corrected glucose via the clinic API and checked the patient reviewed badge. No diagnostic interpretation or physical device accuracy is claimed.
+
+Clinic priority tests cover clinic/role restrictions, required reasons, no automatic classification of extreme unverified OCR, blocking routine before verification, and reassessment when report revisions change. Full suite before the final revision/pending refinements: 139 passed; focused priority/readings checks rerun afterward.
+
+Final mobile browser acceptance passed: nurse saves a reasoned High priority assessment, filters the High queue, sees unverified reading labels and has no horizontal overflow. Updated frontend production build passed. Six focused priority/readings tests passed after the report-revision and pending-report refinements. No clinical numeric rules, emergency alerts or automatic care deadlines were enabled.
