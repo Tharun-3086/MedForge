@@ -1,3 +1,15 @@
+# Latest update: Render Free and private Supabase storage
+
+Prepared an opt-in Supabase Storage adapter: originals remain Fernet-encrypted, downloads use the authenticated private-object API, and upload failures never fall back to ephemeral disk. Local storage remains the default. Object keys are validated; remote errors return a generic 503 without credentials/provider details.
+
+Added `python -m app.render_start` for the synthetic Render Free profile: startup validation, Alembic migration, RLS/grant protection on application tables, seed only when the database is empty, then one Uvicorn process on PORT. Small connection pools, eager jobs, inline scheduling and conservative upload limits are documented in `niyamit/backend/.env.render.example`. Supabase Data API must be disabled before first deployment; Storage stays enabled. `niyamit/RENDER_FREE.md` gives exact Git, Supabase, backend/frontend Render and hosted acceptance steps.
+
+Validation: 160 backend tests passed; Docker image `niyamit-render-check` built. Remote HTTP storage is mocked in automated tests, with real local PostgreSQL migrations and Tesseract. Patient upload -> original download -> clinic field review -> patient reviewed result and cross-clinic denial passed. Repeat startup preserves clinics. Source-candidate scan found no configured secret values; real environment files remain ignored.
+
+Live Supabase/Render deployment and hosted persistence/phone acceptance are NOT completed: private values must be entered into the hosting dashboards, and source must be pushed/merged by the user first. No assistant commit or push was performed. Free services sleep and cannot guarantee timed reminders, retention deadlines, availability or real-patient production suitability.
+
+---
+
 # Latest update: demo subscriptions and hosted deployment
 
 Clinic admins can select illustrative INR/month plans based on current active follow-up patients, with persistent SIMULATED_NO_PAYMENT history. No merchant account, tax invoice, charge or automatic renewal is implemented. Care records remain accessible. Activation is disabled outside demo mode.

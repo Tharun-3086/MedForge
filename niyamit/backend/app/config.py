@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +24,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     storage_dir: str = "./data/artifacts"
     storage_encryption_key: str = ""  # Fernet key; derived from SECRET_KEY when empty
+    storage_provider: str = "local"  # local | supabase (ciphertext in a private bucket)
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = "niyamit-artifacts"
+    storage_timeout_seconds: float = 30.0
+    database_pool_size: int = 10
+    database_max_overflow: int = 10
     public_app_url: str = "http://localhost:3000"  # used in patient links inside messages
     cookie_secure: bool = False  # set true behind HTTPS
     session_hours: int = 12
@@ -99,6 +108,19 @@ class Settings(BaseSettings):
         return bool(self.openai_api_key.strip())
 
     def validate_for_startup(self) -> None:
+        if self.storage_provider not in ("local", "supabase"):
+            raise RuntimeError("Unknown STORAGE_PROVIDER.")
+        if self.storage_provider == "supabase":
+            url = urlsplit(self.supabase_url)
+            if (url.scheme != "https" or not url.hostname or url.username or url.password
+                    or url.path not in ("", "/") or url.query or url.fragment):
+                raise RuntimeError("SUPABASE_URL must be the HTTPS project origin.")
+            if not self.supabase_service_role_key.strip():
+                raise RuntimeError("Supabase storage requires a server-only service role key.")
+            if not re.fullmatch(r"[a-zA-Z0-9_-]+", self.supabase_storage_bucket):
+                raise RuntimeError("Invalid SUPABASE_STORAGE_BUCKET.")
+            if self.secret_key in (DEV_SECRET, PLACEHOLDER_SECRET) or len(self.secret_key) < 32:
+                raise RuntimeError("Remote storage requires a stable random SECRET_KEY of at least 32 characters.")
         if self.patient_otp_provider not in ("development", "twilio", "disabled"):
             raise RuntimeError("Unknown PATIENT_OTP_PROVIDER.")
         if self.patient_otp_provider == "twilio" and not (self.twilio_account_sid and self.twilio_auth_token and self.twilio_verify_service_sid):

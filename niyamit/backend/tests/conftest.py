@@ -32,6 +32,7 @@ os.environ.update({
     "SARVAM_API_KEY": "", "OPENAI_API_KEY": "", "WHATSAPP_ENABLED": "false",
     "SECRET_KEY": "test-secret-key-for-automated-tests-only-0123456789",
     "STORAGE_DIR": tempfile.mkdtemp(prefix="niyamit-test-files-"),
+    "STORAGE_PROVIDER": "local", "SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": "",
 })
 
 import pytest  # noqa: E402

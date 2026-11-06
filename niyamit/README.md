@@ -2,6 +2,10 @@
 
 Patient care and clinic coordination in one responsive web application. The shared entry page supports separate authenticated patient/staff sessions and backend clinic isolation. The home-screen manifest launches `/`; the Android debug shell is documented below; offline records and iPhone builds are not implemented.
 
+## Free hosted demo
+
+See [RENDER_FREE.md](RENDER_FREE.md) for Render Free with Supabase PostgreSQL and a private encrypted `niyamit-artifacts` bucket. The profile runs migrations and synthetic seeding before starting one API process. Free services sleep; it is a demo, with hosted acceptance still required. Local Docker storage remains the default.
+
 ## Features
 
 - Twilio Verify SMS login or clearly labelled development OTP. Development OTP opens synthetic records only and is rejected in production.

@@ -2,6 +2,10 @@
 
 One responsive application for patients and clinics: SMS OTP, prescription/report scanning, clinic review, follow-ups, multilingual messages, voice replies and clinic onboarding.
 
+## Free hosted demo
+
+The [Render Free + Supabase guide](niyamit/RENDER_FREE.md) covers persistent encrypted cloud storage, backend/frontend setup and checks before sharing. It is a synthetic demo with free-tier sleep/usage limits, not a real-patient production release.
+
 **Current release: deployable synthetic-data demo.** Twilio SMS login has been tested by the user. Subscriptions simulate billing and collect no money. Real-patient production requires the acceptance gates in the deployment guide.
 
 ## Android, health readings and clinic priority

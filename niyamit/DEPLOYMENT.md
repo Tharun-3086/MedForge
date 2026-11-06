@@ -1,5 +1,7 @@
 # Deployment and operations
 
+For the no-credit-card **Render Free + Supabase synthetic demo**, follow [RENDER_FREE.md](RENDER_FREE.md). It uses private encrypted cloud storage and a single-process API; the VPS Compose instructions below are a separate deployment option.
+
 For an independent server-hosted synthetic demo with HTTPS, use [HOSTED_DEMO.md](HOSTED_DEMO.md) and the standalone compose.hosted.yml file. Only its proxy publishes host ports. Demo subscriptions collect no money; see [BILLING.md](BILLING.md).
 
 
