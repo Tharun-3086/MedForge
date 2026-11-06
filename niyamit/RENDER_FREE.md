@@ -113,6 +113,8 @@ Validation for this change: 160 backend tests passed and the deployment Docker i
 
 ## Viewing data, backups and limitations
 
+Patient OTP retry update: apply the latest Alembic migration via `python -m app.render_start` before deploying the matching frontend. Phone send limits persist in PostgreSQL, with one successful send per minute and five per hour. Cooldown taps and failed provider sends do not use that allowance. A separate shared-network backstop limits possible starts to 120/hour. Retry-After reaches the frontend countdown, which survives reloads without storing the entered OTP. Keep rate limits enabled. Twilio trial recipient restrictions and provider limits still apply. APK users receive the hosted UI fix after Reload; no APK rebuild or database reset is needed.
+
 View records in Supabase's Table Editor/SQL Editor and ciphertext objects in Storage. The backend's trusted database role can access the application tables; browser roles cannot. Do not make the bucket public to preview a file: use Niyamit's authorized original-file endpoint, which decrypts after checking access.
 
 Back up the database, bucket objects, and the exact `SECRET_KEY`/optional `STORAGE_ENCRYPTION_KEY` together. Losing/changing the encryption key makes existing originals unreadable. Redeploying code is not a database rollback. Supabase cloud data is separate from local Docker volumes.

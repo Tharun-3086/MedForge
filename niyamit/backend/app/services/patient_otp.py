@@ -1,6 +1,7 @@
 """Single-use phone login challenges with separate development and SMS modes."""
 import hashlib
 import hmac
+import math
 import re
 import secrets
 import uuid
@@ -40,7 +41,7 @@ def digest(value):
     return hmac.new(settings.secret_key.encode(), ('patient-otp:' + value).encode(), hashlib.sha256).hexdigest()
 
 
-def request_code(db, phone):
+def request_code(db, phone, *, before_send=None):
     guard()
     phone = phone_number(phone)
     now = utcnow(); key = digest(phone); challenge = uuid.uuid4()
@@ -51,8 +52,18 @@ def request_code(db, phone):
         index_elements=['phone_hash']).returning(PatientOtpChallenge.id))
     row = db.scalar(select(PatientOtpChallenge).where(PatientOtpChallenge.phone_hash == key).with_for_update())
     if created is None:
-        if (now-row.requested_at).total_seconds() < 60:
-            raise HTTPException(429, 'Wait 60 seconds before requesting another code.')
+        remaining = math.ceil(60 - (now-row.requested_at).total_seconds())
+        if remaining > 0:
+            raise HTTPException(429, f'Wait {remaining} seconds before requesting another code.',
+                                headers={'Retry-After': str(remaining)})
+    window_end = row.send_window_started_at + timedelta(hours=1) if row.send_window_started_at else now
+    if row.send_count >= 5 and now < window_end:
+        remaining = max(1, math.ceil((window_end-now).total_seconds()))
+        raise HTTPException(429, 'This number has reached its hourly SMS limit. Use the latest code or wait for the countdown.',
+                            headers={'Retry-After': str(remaining)})
+    if before_send is not None:
+        before_send()  # coarse IP backstop counts possible sends, never cooldown taps
+    if created is None:
         for name, value in values.items():
             setattr(row, name, value)
     if settings.patient_otp_provider == 'twilio':
@@ -62,6 +73,9 @@ def request_code(db, phone):
         except HTTPException:
             db.rollback()
             raise
+    if now >= window_end:
+        row.send_window_started_at, row.send_count = now, 0
+    row.send_count += 1
     db.commit()
     result = {'challenge_id': str(challenge), 'expires_in_seconds': 300, 'resend_after_seconds': 60,
               'mode': settings.patient_otp_provider,
@@ -79,16 +93,16 @@ def verify_code(db, phone, challenge_id, code):
     now = utcnow()
     if row is None or row.used_at or row.expires_at <= now or row.attempts >= 5:
         raise HTTPException(401, 'Code is invalid or expired. Request a new code.')
-    row.attempts += 1
     if settings.patient_otp_provider == 'twilio':
         from app.services import twilio_verify
         try:
             valid = row.code_hash.startswith('twilio:') and twilio_verify.check(row.code_hash[7:], code)
         except HTTPException:
-            db.commit()
+            db.rollback()  # provider downtime/rate limits are not incorrect-code attempts
             raise
     else:
         valid = not row.code_hash.startswith('twilio:') and hmac.compare_digest(row.code_hash, digest(f'{row.id}:{code}'))
+    row.attempts += 1
     if not valid:
         if row.attempts >= 5:
             row.used_at = now

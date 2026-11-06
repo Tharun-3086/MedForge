@@ -175,7 +175,7 @@ class PatientAccessToken(Base):
 
 
 class PatientOtpChallenge(Base):
-    """One short-lived, single-use development challenge per hashed phone."""
+    """A short-lived challenge and persistent send allowance per hashed phone."""
     __tablename__ = "patient_otp_challenges"
     phone_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     id: Mapped[uuid.UUID] = mapped_column(Uuid, unique=True)
@@ -184,6 +184,9 @@ class PatientOtpChallenge(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Successful sends only. Rejected cooldown retries never consume the hourly allowance.
+    send_window_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    send_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class CaregiverGrant(Base):

@@ -1,3 +1,17 @@
+# Latest local update: patient OTP retries and demo recording kit
+
+The friend reported too many requests after Send SMS code. Inspection found that premature taps and failed provider sends consumed process-memory phone/IP quotas, with a misleading one-minute message for an hour-long limit. The exact provider response from the friend's attempt was not available, so a provider throttle/trial restriction cannot be excluded.
+
+The fix moves successful per-phone send accounting into PostgreSQL (one/minute, five/hour) with row locking and an additive Alembic migration. Cooldown taps do not consume send allowances, failed provider sends preserve the previous challenge, and provider outages do not count as incorrect OTP attempts. The shared-network backstop permits 120 possible sends/hour, with a separate coarse verification limit and the existing five-attempt challenge guard. Rate limits remain enabled. Generic and provider throttles now supply accurate/bounded Retry-After. Twilio trial errors explain recipient verification.
+
+The login UI restores pending challenges and countdowns across reloads, never saves entered/development OTPs, keeps code verification available during normal resend cooldown, and handles provider check blocks and expiry without automatic resend. This is a hosted UI change, so the existing APK can load it after reload.
+
+Validation: 171 backend tests passed, frontend type checking and production build passed, and four browser retry/restore scenarios passed with mocked APIs. No real SMS was sent for these tests. This update is not yet committed, pushed or deployed by the assistant. Deploy backend migrations before the frontend, then verify real delivery manually. Multi-instance production still needs shared infrastructure and correct proxy identity handling.
+
+DEMO_VIDEO.md contains a three-minute shot list and narration for patient OTP, a synthetic report scan, clinic source review and patient confirmed results. The PDF/PNG fixtures are under niyamit/docs/demo-assets. The PNG was read by local Tesseract with the expected BP, glucose and HbA1c. The recording kit is also under D:/niyamit/demo-video. No finished walkthrough video has been recorded yet.
+
+---
+
 # Live Render acceptance: patient upload and clinic review
 
 Live URLs: https://niyamit-app.onrender.com (frontend), https://medforge-rg8q.onrender.com (API). Tested with fictional patients and generated documents only. Health, real clinic login, secure session cookies, patient access-link login, correct public link origin, image upload through mobile UI, Tesseract readings (BP 120/80 mmHg, fasting glucose 110 mg/dL, HbA1c 6.2%), private original download, clinic date correction and follow-up plan approval through UI, patient results with immutable automatic values separate from reviewed information, cross-clinic/patient denial and CSRF protection passed. Image upload plus processing took 8.6 seconds for the generated 1600x1000 test image; this is a sample measurement, not a performance guarantee.

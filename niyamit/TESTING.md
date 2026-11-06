@@ -97,4 +97,10 @@ Final mobile browser acceptance passed: nurse saves a reasoned High priority ass
 
 Upload a synthetic report containing labelled BP, glucose and HbA1c values with units. In Report Inbox, Correct must show a text editor for each health reading and a date editor for document/follow-up dates. Save a valid correction with a reason; the page must show the previous value with its units without a date-format exception. The patient must see the corrected clinic-reviewed value separately from the unchanged automatic reading. Confirm the latest health reading uses the reviewed value. The local production frontend passed these checks against the live Render API; the frontend patch still requires a GitHub push/merge and Render deployment.
 
-The live image upload/clinic date review/plan approval flow also passed. SMS delivery/valid OTP login were deferred by the user; provider availability and invalid-challenge rejection alone do not count as an SMS end-to-end pass.
+The live image upload/clinic date review/plan approval flow also passed. A later live run confirmed the deployed numeric correction patch and a real SMS OTP login with the owner entering the code privately. The dashboard loaded, cookies were secure and clinic-only access was denied. That earlier pass does not validate the new retry patch before its deployment.
+
+## OTP retry regression
+
+Full backend suite for this update: 171 passed. Tests cover cooldown taps without allowance consumption, five successful sends per hour, reset after an hour, persistence independent of process counters, twelve different phones behind one network, send failure rollback, provider throttles without incorrect-code penalties, safe Retry-After headers and trial-recipient explanations. No real SMS is sent in automated tests.
+
+Frontend type checking and production build passed. Browser tests with mocked API responses verify normal pending-code restore, resend timing, hourly throttle persistence through reload, provider-check cooldown and expiry, and absence of entered/development codes in session storage. No automatic SMS resend occurs on reload. Real provider delivery on the retry patch remains a post-deployment manual check.

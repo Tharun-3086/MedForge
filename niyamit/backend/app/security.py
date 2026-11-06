@@ -4,7 +4,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import math
 import secrets
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -219,6 +221,7 @@ def not_found_or_denied(db: Session, staff: Staff, object_type: str, object_id: 
 
 # ------------------------------------------------------------------ rate limiting
 _local_counters: dict[str, tuple[int, float]] = {}
+_local_counter_lock = threading.Lock()
 
 
 def rate_limit(bucket: str, limit: int, window_seconds: int) -> None:
@@ -227,7 +230,9 @@ def rate_limit(bucket: str, limit: int, window_seconds: int) -> None:
 
     if not settings.rate_limits_enabled:
         return
-    window = int(time.time() // window_seconds)
+    now = time.time()
+    window = int(now // window_seconds)
+    reset_at = (window + 1) * window_seconds
     key = f"rl:{bucket}:{window}"
     try:
         r = get_redis()
@@ -235,11 +240,15 @@ def rate_limit(bucket: str, limit: int, window_seconds: int) -> None:
         if count == 1:
             r.expire(key, window_seconds + 5)
     except Exception:  # noqa: BLE001 - availability over strictness for the demo
-        count, _ = _local_counters.get(key, (0, 0.0))
-        count += 1
-        _local_counters[key] = (count, time.time())
+        with _local_counter_lock:
+            for expired in [k for k, (_, expiry) in _local_counters.items() if expiry <= now]:
+                del _local_counters[expired]
+            count = _local_counters.get(key, (0, reset_at))[0] + 1
+            _local_counters[key] = (count, reset_at)
     if count > limit:
-        raise HTTPException(status_code=429, detail="Too many requests. Please wait a minute and try again.")
+        retry = max(1, math.ceil(reset_at - now))
+        raise HTTPException(status_code=429, detail=f"Too many requests. Try again in {retry} seconds.",
+                            headers={"Retry-After": str(retry)})
 
 
 def client_ip(request: Request) -> str:

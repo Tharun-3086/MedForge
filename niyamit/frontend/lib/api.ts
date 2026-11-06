@@ -5,9 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /** Error with the server's plain-language message (FastAPI `detail`). */
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  retryAfterSeconds: number | null;
+  constructor(status: number, message: string, retryAfterSeconds: number | null = null) {
     super(message);
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -34,7 +36,13 @@ export async function api<T = unknown>(path: string, opts: Options = {}): Promis
       /* not JSON */
     }
     if (res.status >= 500) message = "The server had a problem. Try again in a moment.";
-    throw new ApiError(res.status, message);
+    const rawRetry = res.headers.get("Retry-After");
+    let retry: number | null = null;
+    if (rawRetry) {
+      const seconds = /^\d+$/.test(rawRetry) ? Number(rawRetry) : Math.ceil((Date.parse(rawRetry) - Date.now()) / 1000);
+      if (Number.isFinite(seconds)) retry = Math.max(1, Math.min(86400, seconds));
+    }
+    throw new ApiError(res.status, message, retry);
   }
   const type = res.headers.get("content-type") || "";
   return (type.includes("application/json") ? res.json() : res.blob()) as Promise<T>;
