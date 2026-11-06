@@ -70,7 +70,7 @@ All server secrets belong in `backend/.env`, never `NEXT_PUBLIC_*`, Git, screens
 | `ASR_PROVIDER=none`, `TTS_PROVIDER=none` | Disable external speech services |
 | `SARVAM_API_KEY` | Optional live speech, translation/understanding and document provider |
 | `PATIENT_OTP_PROVIDER=development` | On-screen test codes, synthetic records only |
-| `PATIENT_OTP_PROVIDER=disabled` | No phone OTP; required until a real provider is implemented for production |
+| `PATIENT_OTP_PROVIDER=disabled` | Disable phone OTP when no SMS provider is configured |
 | `PUBLIC_APP_URL` | Address used when generating patient links |
 | `DEMO_MODE=true` | Synthetic accounts, simulated channel and test controls |
 | `SECRET_KEY` / `STORAGE_ENCRYPTION_KEY` | Authentication and artifact encryption; preserve securely with backups |
@@ -114,7 +114,7 @@ See [TESTING.md](TESTING.md), [DEPLOYMENT.md](DEPLOYMENT.md) and [../SECURITY.md
 
 ## Current limitations
 
-Real SMS OTP is not implemented; do not enable development OTP for real patients. Live speech/translation require provider credentials, connectivity and consent. Real WhatsApp delivery and native Android packaging are not release-verified. Clinical and native-language template approval, production infrastructure/security review, backup restore rehearsal and physical microphone testing remain launch gates. No regulatory certification or medical accuracy claim is made.
+Twilio Verify SMS integration is implemented but requires configured credentials and live delivery acceptance; do not enable development OTP for real patients. Live speech/translation require provider credentials, connectivity and consent. Real WhatsApp delivery and native Android packaging are not release-verified. Clinical and native-language template approval, production infrastructure/security review, backup restore rehearsal and physical microphone testing remain launch gates. No regulatory certification or medical accuracy claim is made.
 
 ## Clinic patient registration and staff approval
 
@@ -131,3 +131,17 @@ For a new non-demo clinic, see the private provisioning command in [DEPLOYMENT.m
 Open `/` to choose Patient or Clinic in the same application. Patient and staff sessions remain separate, and backend permissions determine access. Clinic mobile screens include quick navigation for Today, Patients, Reports and Tasks (filtered by role), plus a full Menu and Switch app link. The manifest launches the shared entry point. This is a responsive web app/home-screen experience, not a native Android APK or an offline medical-record store.
 
 Patient Listen now shows audio preparation status and a player with manual Play/Pause controls if the browser blocks automatic playback. Reply action errors are visible on all patient views, including difficulty selection. The original confirmation and barrier workflows remain server-validated.
+
+## Real SMS setup
+
+Twilio Verify is supported with local challenge limits and provider approval checks. See [SMS_SETUP.md](SMS_SETUP.md). No account credentials or live SMS delivery were available during automated testing. The default remains development OTP.
+
+## First-use tour and mobile reports
+
+A skippable three-step introduction appears once per browser profile and can be reopened through App tour. Reports use labelled cards below 700px; desktop keeps the table. Other clinic tables scroll within their container rather than squeezing words into single-character columns.
+
+## New clinic owner signup
+
+Clinic owners can open `/register-clinic` from the welcome or login page, enter clinic details and choose their administrator password. Signup immediately creates an isolated clinic and signs its owner in as ADMIN. It never joins an existing clinic or changes another account. In demo mode the new clinic is synthetic. Templates begin as drafts. Email addresses and professional credentials are not verified by signup.
+
+The new administrator opens Settings > Clinic staff access to invite doctors, nurses or reception staff. Staff use the private invitation to set their password, then sign in at `/login`; they do not create another clinic. Existing account transfers, email verification and password recovery remain separate outstanding work.

@@ -23,6 +23,7 @@ Open [Niyamit](http://localhost:3000), [patient login](http://localhost:3000/pat
 
 - [Complete app guide](niyamit/README.md): setup, patient/clinic workflows, configuration and architecture.
 - [Deployment and operations](niyamit/DEPLOYMENT.md): deployment boundaries, persistence, backups and production checklist.
+- [Twilio SMS setup](niyamit/SMS_SETUP.md): real OTP integration, local credentials and database inspection.
 - [Testing](niyamit/TESTING.md): automated checks and manual acceptance steps.
 - [Security](SECURITY.md): secret handling and reporting.
 - [Optional Baidu OCR](niyamit/BAIDU_OCR.md): experimental only; Tesseract is the default.

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -103,3 +103,48 @@ def demo_users(db: Session = Depends(get_db)) -> dict:
                       .order_by(Clinic.name.desc(), Membership.role)).all()
     return {"password": DEMO_PASSWORD,
             "users": [{"email": u.email, "name": u.name, "role": m.role, "clinic": c.short_name} for u, m, c in rows]}
+
+
+class ClinicSignupIn(BaseModel):
+    clinic_name: str = Field(min_length=2, max_length=200)
+    short_name: str = Field(min_length=2, max_length=60)
+    owner_name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=12, max_length=200)
+
+    @field_validator("clinic_name", "short_name", "owner_name")
+    @classmethod
+    def trim_name(cls, value):
+        if len(value.strip()) < 2:
+            raise ValueError("Enter at least two characters")
+        return value.strip()
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, value):
+        value = value.strip().lower()
+        if value.count("@") != 1 or not all(value.split("@")) or any(c.isspace() for c in value):
+            raise ValueError("Enter a valid email address")
+        return value
+
+
+@router.post("/register-clinic", status_code=201)
+def register_clinic(body: ClinicSignupIn, request: Request, response: Response, db: Session = Depends(get_db)):
+    from app.bootstrap_clinic import create_clinic
+    from sqlalchemy.exc import IntegrityError
+    rate_limit(f"clinic-signup:{client_ip(request)}", 5, 3600)
+    try:
+        clinic = create_clinic(db, name=body.clinic_name, short_name=body.short_name,
+                              email=body.email, admin_name=body.owner_name, password=body.password)
+        # Public demonstration deployments must not silently create real-data tenants.
+        clinic.is_synthetic = settings.demo_mode
+        user = db.scalar(select(User).where(User.email == body.email))
+        staff = Staff(user.id, clinic.id, Role.ADMIN, user.name, user.email)
+        audit(db, clinic_id=clinic.id, action="CLINIC_SELF_REGISTERED", actor=staff,
+              detail={"email_verified": False, "synthetic": clinic.is_synthetic})
+        db.commit()
+    except (ValueError, IntegrityError):
+        db.rollback()
+        raise HTTPException(409, "Unable to register these details. If you already have an account, sign in; otherwise contact support.") from None
+    set_cookie(response, STAFF_COOKIE, issue_session("staff", str(user.id), str(clinic.id), role=Role.ADMIN))
+    return staff_payload(db, staff)

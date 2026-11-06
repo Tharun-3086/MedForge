@@ -127,7 +127,7 @@ class OtpVerifyIn(OtpRequestIn):
 
 @router.get("/otp/config")
 def otp_config():
-    return {"available": patient_otp.available(), "development": patient_otp.available()}
+    return {"available": patient_otp.available(), "development": patient_otp.development()}
 
 
 @router.post("/otp/request")
@@ -144,12 +144,12 @@ def otp_verify(body: OtpVerifyIn, request: Request, response: Response, db: Sess
     response.delete_cookie(PATIENT_COOKIE, path="/")
     response.delete_cookie("nyt_patient_choice", path="/")
     if not matches:
-        return {"authenticated": False, "profiles": [], "message": "No synthetic clinic record is linked to this number. Ask your clinic to register the correct number."}
+        return {"authenticated": False, "profiles": [], "message": "No clinic record is linked to this number. Ask your clinic to register the correct number."}
     if len(matches) == 1:
         p = matches[0]
         set_cookie(response, PATIENT_COOKIE, issue_session("patient", str(p.id), str(p.clinic_id)))
         audit(db, clinic_id=p.clinic_id, action="PATIENT_OTP_LOGIN", actor_type=ActorType.PATIENT,
-              actor_id=str(p.id), patient_id=p.id, detail={"mode": "development"})
+              actor_id=str(p.id), patient_id=p.id, detail={"mode": settings.patient_otp_provider})
         db.commit()
         return {"authenticated": True}
     ticket = issue_session("patient-choice", "verified-phone", "", ids=[str(p.id) for p in matches],
@@ -169,12 +169,12 @@ def otp_select(body: ProfileChoiceIn, request: Request, response: Response, db: 
     if str(body.patient_id) not in claims.get("ids", []):
         raise HTTPException(403, "This record is not linked to the verified number.")
     p = db.get(Patient, body.patient_id)
-    if p is None or not p.is_synthetic:
+    if p is None or ((patient_otp.development() or settings.demo_mode) and not p.is_synthetic):
         raise HTTPException(403, "Record is unavailable.")
     set_cookie(response, PATIENT_COOKIE, issue_session("patient", str(p.id), str(p.clinic_id)))
     response.delete_cookie("nyt_patient_choice", path="/")
     audit(db, clinic_id=p.clinic_id, action="PATIENT_OTP_LOGIN", actor_type=ActorType.PATIENT,
-          actor_id=str(p.id), patient_id=p.id, detail={"mode": "development"})
+          actor_id=str(p.id), patient_id=p.id, detail={"mode": settings.patient_otp_provider})
     db.commit()
     return {"authenticated": True}
 

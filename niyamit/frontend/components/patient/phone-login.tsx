@@ -36,7 +36,7 @@ export function PhoneLogin() {
       <label className="field"><span>Phone number</span><input type="tel" autoComplete="tel" placeholder="+91 90000 00000" required value={phone} disabled={Boolean(challenge)||busy} onChange={e=>setPhone(e.target.value)}/></label>
       {challenge?<><p role="status">{challenge.message}</p>{challenge.development_code?<p className="notice"><b>Development code: <span data-testid="development-code">{challenge.development_code}</span></b><br/>Expires in 5 minutes. This is not proof of phone ownership.</p>:null}
         <label className="field"><span>6-digit code</span><input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))}/></label></>:null}
-      <button className="btn" disabled={busy||!config?.available}>{busy?"Please wait…":challenge?"Verify and sign in":"Get test code"}</button>
+      <button className="btn" disabled={busy||!config?.available}>{busy?"Please wait…":challenge?"Verify and sign in":config?.development?"Get test code":"Send SMS code"}</button>
       {challenge?<div className="row"><button className="btn btn--quiet" type="button" disabled={busy||wait>0} onClick={()=>void requestCode()}>{wait?`Resend in ${wait}s`:"Get a new code"}</button><button className="pt-link" type="button" disabled={busy} onClick={()=>{setChallenge(null);setCode("");setError(null)}}>Change number</button></div>:null}
     </form>}
     <ErrorNote error={error}/>

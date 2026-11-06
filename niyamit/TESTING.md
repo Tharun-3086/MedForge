@@ -63,3 +63,11 @@ After the laptop restart, the new Cloudflare tunnel was verified and PUBLIC_APP_
 - Admin revokes the test staff membership; the existing session immediately loses patient access.
 
 No real SMS was sent and no physical microphone/emulator hardware test was performed. Test staff access was revoked after verification. Synthetic QA records remain identifiable by their QA names. No Git commit or push was performed.
+
+## Twilio Verify integration — 2026-11-06
+
+130 backend tests passed, including mocked Twilio send/check, invalid and reused codes, no development-code exposure, provider failures, and real-mode record authentication after provider approval. The suite forces development OTP and blank SMS credentials by default, so test runs cannot send paid SMS. Live delivery remains untested until the user configures a Twilio account.
+
+Mobile report cards and first-use tour checked at 390px width: no page overflow, labelled report rows, desktop table preserved, Skip/completion persistence/replay passed. This is browser viewport testing; physical iPhone Safari acceptance remains manual.
+
+Immediate clinic signup tests cover creation of an isolated empty clinic, administrator permissions, draft templates, password login, duplicate prevention, invalid passwords and preservation of existing accounts. Live SMS login was confirmed by the user on 2026-11-06 after rotating/configuring the Twilio token.

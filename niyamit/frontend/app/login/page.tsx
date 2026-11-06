@@ -99,6 +99,7 @@ export default function LoginPage() {
             ))}
           </section>
         ) : null}
+        <p>New clinic owner? <Link href="/register-clinic">Register your clinic</Link>. Staff members: ask your administrator for an invitation.</p>
       </div>
     </main>
   );
