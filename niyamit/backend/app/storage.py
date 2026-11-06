@@ -179,8 +179,11 @@ def _remote(method: str, key: str, *, authenticated: bool = False, **kwargs) -> 
     url = (settings.supabase_url.rstrip("/") + "/storage/v1/object/"
            + ("authenticated/" if authenticated else "")
            + settings.supabase_storage_bucket + "/" + key)
-    headers = {"Authorization": f"Bearer {settings.supabase_service_role_key}",
-               "apikey": settings.supabase_service_role_key, **kwargs.pop("headers", {})}
+    key_value = settings.supabase_service_role_key
+    headers = {"apikey": key_value, **kwargs.pop("headers", {})}
+    # Modern Supabase secret keys are opaque API keys, not JWTs.
+    if not key_value.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {key_value}"
     try:
         # Do not follow redirects with the service key or include provider bodies/URLs in exceptions.
         with httpx.Client(timeout=settings.storage_timeout_seconds, follow_redirects=False) as client:

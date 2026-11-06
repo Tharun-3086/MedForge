@@ -92,3 +92,9 @@ Final mobile browser acceptance passed: nurse saves a reasoned High priority ass
 ## Render/Supabase storage checks
 
 `backend/tests/test_remote_storage.py` uses mocked Supabase HTTP responses and real local PostgreSQL/Tesseract. It verifies encrypted private upload/download/delete, invalid-key rejection, failures without local fallback, patient upload through clinic field review and patient results, cross-clinic denial, table protections, and repeatable Render preparation. Follow [RENDER_FREE.md](RENDER_FREE.md) for actual hosted acceptance, including file persistence after a backend restart.
+
+## Clinic numeric correction regression
+
+Upload a synthetic report containing labelled BP, glucose and HbA1c values with units. In Report Inbox, Correct must show a text editor for each health reading and a date editor for document/follow-up dates. Save a valid correction with a reason; the page must show the previous value with its units without a date-format exception. The patient must see the corrected clinic-reviewed value separately from the unchanged automatic reading. Confirm the latest health reading uses the reviewed value. The local production frontend passed these checks against the live Render API; the frontend patch still requires a GitHub push/merge and Render deployment.
+
+The live image upload/clinic date review/plan approval flow also passed. SMS delivery/valid OTP login were deferred by the user; provider availability and invalid-challenge rejection alone do not count as an SMS end-to-end pass.

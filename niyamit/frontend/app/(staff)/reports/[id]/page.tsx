@@ -13,10 +13,10 @@ import { fmtDate, fmtDateTime } from "@/lib/format";
 import { useStaff } from "@/lib/staff-context";
 import type { Field, Proposal } from "@/lib/types";
 
-function showValue(f: Field): string {
-  if (!f.value) return "No exact value";
-  if (f.name === "document_type") return f.value.charAt(0) + f.value.slice(1).toLowerCase().replace(/_/g, " ");
-  return /^\d{4}-\d{2}-\d{2}$/.test(f.value) ? fmtDate(f.value) : f.value;
+function showValue(f: Field, value = f.value): string {
+  if (!value) return "No exact value";
+  if (f.name === "document_type") return value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, " ");
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? fmtDate(value) : value;
 }
 
 export default function ReviewPage() {
@@ -130,7 +130,7 @@ export default function ReviewPage() {
                 <span className="source-quote">Written as: “{f.extracted_value}”{f.evidence.page ? `, page ${f.evidence.page}` : ""}</span>
               ) : null}
               {f.evidence.computed ? <span className="small muted">{f.evidence.computed}</span> : null}
-              {f.status === "APPROVED" && f.proposed_value !== f.value ? <span className="small">Corrected from {f.proposed_value ? fmtDate(f.proposed_value) : "no value"}</span> : null}
+              {f.status === "APPROVED" && f.proposed_value !== f.value ? <span className="small">Corrected from {f.proposed_value ? showValue(f, f.proposed_value) : "no value"}</span> : null}
               {f.review_reasons.map((r) => <span key={r} className="small" style={{ color: "var(--amber)" }}>{REVIEW_REASONS[r] ?? r}</span>)}
               {open && f.status !== "APPROVED" && f.status !== "REJECTED" ? (
                 editing === f.id ? (
@@ -140,7 +140,8 @@ export default function ReviewPage() {
                         {["PRESCRIPTION", "LAB_REPORT", "DISCHARGE_SUMMARY", "REGISTER", "OTHER"].map((v) => <option key={v} value={v}>{v.toLowerCase().replace("_", " ")}</option>)}
                       </select>
                     ) : (
-                      <input type="date" value={value} onChange={(e) => setValue(e.target.value)} aria-label={`Correct ${f.label}`} />
+                      <input type={f.name === "document_date" || f.name in FIELD_TO_ITEM ? "date" : "text"}
+                        value={value} onChange={(e) => setValue(e.target.value)} aria-label={`Correct ${f.label}`} />
                     )}
                     <input type="text" placeholder="Why the correction (required)" value={reason} onChange={(e) => setReason(e.target.value)} />
                     <div className="row">
