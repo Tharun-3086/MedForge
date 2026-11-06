@@ -5,6 +5,9 @@ import { ToastProvider } from "@/components/ui";
 
 import "./globals.css";
 import "./care.css";
+import "./intro.css";
+import { AppTour } from "@/components/app-tour";
+import { AppIntro } from "@/components/app-intro";
 
 export const metadata: Metadata = {
   title: "Niyamit Care Bridge",
@@ -20,6 +23,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
+        <AppIntro />
+        <AppTour />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

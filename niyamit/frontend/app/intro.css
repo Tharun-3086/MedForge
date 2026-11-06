@@ -1,0 +1,15 @@
+.app-intro { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; pointer-events: none; background: radial-gradient(ellipse at 50% 40%, #204861, #0f2a44 70%); color: #fff; animation: intro-away 1.4s ease both; }
+.app-intro-content { display: grid; justify-items: center; gap: 16px; }
+.app-intro-emblem { display: grid; place-items: center; width: 112px; height: 112px; border: 1px solid #7fb7c940; border-radius: 34px; background: #ffffff08; box-shadow: 0 0 64px #7fb7c91a; animation: intro-arrive .65s cubic-bezier(.2,.8,.2,1) both; }
+.app-intro-logo { width: 76px; height: 76px; animation: intro-turn 1.05s cubic-bezier(.2,.8,.2,1) both; }
+.app-intro-name { font-size: 36px; font-weight: 650; letter-spacing: -.03em; animation: intro-arrive .55s .12s both; }
+.app-intro-tagline { font-size: 15px; color: #c0d6e2; animation: intro-arrive .55s .22s both; }
+@keyframes intro-arrive { from { opacity: 0; transform: translateY(10px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes intro-turn { from { transform: rotate(-70deg); opacity: .2; } to { transform: rotate(0); opacity: 1; } }
+@keyframes intro-away { 0%, 75% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .app-intro { display: none; } }
+
+.tour-launch { position: fixed; bottom: calc(96px + env(safe-area-inset-bottom)); right: 12px; z-index: 40; border: 1px solid #cad6df; border-radius: 20px; background: #fff; color: #0f2a44; font-size: 12px; padding: 4px 10px; cursor: pointer; }
+.app-tour { border: 1px solid var(--rule); border-radius: 28px; padding: 26px; width: min(480px,calc(100% - 32px)); max-height: 85dvh; overflow-y: auto; color: var(--ink); background: #fff; box-shadow: 0 24px 90px #0f2a4440; }
+.app-tour::backdrop { background: #0f2a4499; }
+.app-tour p { line-height: 1.6; }

@@ -408,5 +408,21 @@ dialog.modal::backdrop { background: rgba(15, 42, 68, 0.35); }
  .clinic-mobile-nav a[aria-current] { background: var(--teal-wash); font-weight: 700; }
  .shell .page { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
  .shell .spread { flex-wrap: wrap; }
- .shell .panel { overflow-wrap: anywhere; }
+ .shell .panel { overflow-wrap: break-word; }
+}
+
+/* Keep generic tables readable and contained; reports become labelled cards. */
+.table-wrap { min-width: 0; max-width: 100%; }
+.table th, .table td { overflow-wrap: normal; word-break: normal; }
+@media (max-width: 700px) {
+ .table-wrap > .table:not(.reports-table) { min-width: 640px; }
+ .reports-table, .reports-table tbody { display: block; width: 100%; }
+ .reports-table thead { display: none; }
+ .reports-table tr { display: block; padding: 16px; border-bottom: 1px solid var(--rule); }
+ .reports-table td { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 12px; padding: 8px 0; border: 0; white-space: normal; }
+ .reports-table td::before { content: attr(data-label); color: var(--muted); font-size: 12px; font-weight: 600; }
+ .reports-table td > * { min-width: 0; }
+ .reports-table td[data-label="Document"] { overflow-wrap: anywhere; }
+ .reports-table td[data-label="Status"] > .small, .reports-table td[data-label="Document"] > .small { grid-column: 2; }
+ .reports-table td .btn { justify-self: start; }
 }

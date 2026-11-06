@@ -37,9 +37,9 @@ Store backups outside the repository with restricted access. Restore into an iso
 
 ## Real-patient production launch gates
 
-- Implement and verify an SMS OTP provider; development OTP is blocked in production. Until then phone OTP must be disabled, not disguised as SMS.
+- Configure Twilio Verify and verify live SMS delivery; development OTP is blocked in production. Until then phone OTP must be disabled, not disguised as SMS.
 - Use a managed secret store, a fresh strong secret, unique database credentials and least-privilege database users. The supplied Compose database password is demo-only.
-- Set `APP_ENV=production`, `DEMO_MODE=false`, `PATIENT_OTP_PROVIDER=disabled`, `COOKIE_SECURE=true`, and an HTTPS `PUBLIC_APP_URL`. Startup rejects unsafe combinations.
+- Set `APP_ENV=production`, `DEMO_MODE=false`, `PATIENT_OTP_PROVIDER=twilio` with valid credentials (or `disabled` when phone login is unavailable), `COOKIE_SECURE=true`, and an HTTPS `PUBLIC_APP_URL`. Startup rejects unsafe combinations.
 - Provision real clinic/staff accounts through an approved administrative process; do not seed demo accounts into a production database. Use the private provisioning command below; never expose it as public self-registration.
 - Deploy behind a trusted HTTPS reverse proxy, expose only required public ports, and validate proxy/rate-limit configuration. Build the frontend with the correct internal API URL.
 - Keep one scheduler instance; the demo Celery worker embeds beat (`-B`) and must not be blindly replicated. Separate scheduling before scaling workers.

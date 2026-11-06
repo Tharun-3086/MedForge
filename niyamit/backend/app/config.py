@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     public_app_url: str = "http://localhost:3000"  # used in patient links inside messages
     cookie_secure: bool = False  # set true behind HTTPS
     session_hours: int = 12
-    patient_otp_provider: str = "development"  # development | disabled; real SMS not configured
+    patient_otp_provider: str = "development"  # development | twilio | disabled
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_verify_service_sid: str = ""
     tasks_eager: bool = False  # run background jobs inline (tests / no-Redis mode)
     rate_limits_enabled: bool = True
     trusted_proxy_hops: int = 1  # proxies in front of the API that append X-Forwarded-For (the Next.js server)
@@ -96,6 +99,10 @@ class Settings(BaseSettings):
         return bool(self.openai_api_key.strip())
 
     def validate_for_startup(self) -> None:
+        if self.patient_otp_provider not in ("development", "twilio", "disabled"):
+            raise RuntimeError("Unknown PATIENT_OTP_PROVIDER.")
+        if self.patient_otp_provider == "twilio" and not (self.twilio_account_sid and self.twilio_auth_token and self.twilio_verify_service_sid):
+            raise RuntimeError("Twilio Verify requires account credentials and a Verify service SID.")
         if self.is_production and self.patient_otp_provider == "development":
             raise RuntimeError("Development OTP must be disabled in production.")
         if self.is_production and (self.secret_key in (DEV_SECRET, PLACEHOLDER_SECRET) or len(self.secret_key) < 32):

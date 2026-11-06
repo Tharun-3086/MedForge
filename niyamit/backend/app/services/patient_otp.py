@@ -1,4 +1,4 @@
-"""Development OTP only. No SMS claim, no real records, no automatic clinic linking."""
+"""Single-use phone login challenges with separate development and SMS modes."""
 import hashlib
 import hmac
 import re
@@ -13,8 +13,13 @@ from app.db import utcnow
 from app.models import PatientOtpChallenge, Patient
 
 
-def available():
+def development():
     return settings.patient_otp_provider == 'development' and settings.demo_mode and not settings.is_production
+
+
+def available():
+    from app.services import twilio_verify
+    return development() or (settings.patient_otp_provider == "twilio" and twilio_verify.ready())
 
 
 def guard():
@@ -50,10 +55,20 @@ def request_code(db, phone):
             raise HTTPException(429, 'Wait 60 seconds before requesting another code.')
         for name, value in values.items():
             setattr(row, name, value)
+    if settings.patient_otp_provider == 'twilio':
+        from app.services import twilio_verify
+        try:
+            row.code_hash = 'twilio:' + twilio_verify.send(phone)
+        except HTTPException:
+            db.rollback()
+            raise
     db.commit()
-    return {'challenge_id': str(challenge), 'expires_in_seconds': 300, 'resend_after_seconds': 60,
-            'mode': 'development', 'development_code': code,
-            'message': 'Development test code — no SMS sent. Only synthetic clinic records can be opened.'}
+    result = {'challenge_id': str(challenge), 'expires_in_seconds': 300, 'resend_after_seconds': 60,
+              'mode': settings.patient_otp_provider,
+              'message': 'Enter the code sent by SMS. It expires in 5 minutes.'}
+    if development():
+        result.update(development_code=code, message='Development test code - no SMS sent. Only synthetic clinic records can be opened.')
+    return result
 
 
 def verify_code(db, phone, challenge_id, code):
@@ -65,12 +80,24 @@ def verify_code(db, phone, challenge_id, code):
     if row is None or row.used_at or row.expires_at <= now or row.attempts >= 5:
         raise HTTPException(401, 'Code is invalid or expired. Request a new code.')
     row.attempts += 1
-    if not hmac.compare_digest(row.code_hash, digest(f'{row.id}:{code}')):
+    if settings.patient_otp_provider == 'twilio':
+        from app.services import twilio_verify
+        try:
+            valid = row.code_hash.startswith('twilio:') and twilio_verify.check(row.code_hash[7:], code)
+        except HTTPException:
+            db.commit()
+            raise
+    else:
+        valid = not row.code_hash.startswith('twilio:') and hmac.compare_digest(row.code_hash, digest(f'{row.id}:{code}'))
+    if not valid:
         if row.attempts >= 5:
             row.used_at = now
         db.commit()
         raise HTTPException(401, 'Code is invalid or expired. Request a new code.')
     row.used_at = now
-    matches = db.scalars(select(Patient).where(Patient.phone_e164 == phone, Patient.is_synthetic.is_(True))).all()
+    query = select(Patient).where(Patient.phone_e164 == phone)
+    if development() or settings.demo_mode:
+        query = query.where(Patient.is_synthetic.is_(True))
+    matches = db.scalars(query).all()
     db.commit()
     return matches

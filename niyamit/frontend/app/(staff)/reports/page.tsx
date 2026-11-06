@@ -81,7 +81,7 @@ export default function ReportsPage() {
         {data && data.proposals.length === 0 ? <Empty title="No documents here">Upload a synthetic prescription above, or try the samples in backend/samples.</Empty> : null}
         {data && data.proposals.length > 0 ? (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table reports-table">
               <thead>
                 <tr><th>Patient</th><th>Document</th><th>Status</th><th>Read by</th><th>Received</th><th /></tr>
               </thead>
@@ -91,20 +91,20 @@ export default function ReportsPage() {
                   const unverified = p.fields.filter((f) => f.status !== "APPROVED" && f.status !== "REJECTED").length;
                   return (
                     <tr key={p.id}>
-                      <td>{p.patient ? <Link href={`/patients/${p.patient.id}`}>{p.patient.name}</Link> : "Not linked"}</td>
-                      <td>
+                      <td data-label="Patient">{p.patient ? <Link href={`/patients/${p.patient.id}`}>{p.patient.name}</Link> : "Not linked"}</td>
+                      <td data-label="Document">
                         {p.artifact?.filename}
                         <span className="small muted" style={{ display: "block" }}>
                           {p.artifact?.source_type.toLowerCase().replace("_", " ")}{p.artifact?.uploaded_by_patient ? ", shared by the patient" : ""}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <Pill tone={tone}>{label}</Pill>
                         {p.status === "NEEDS_REVIEW" ? <span className="small muted" style={{ display: "block" }}>{unverified} of {p.fields.length} fields unchecked</span> : null}
                       </td>
-                      <td className="small">{readerLabel(p)}</td>
-                      <td className="small nowrap">{fmtDateTime(p.created_at)}</td>
-                      <td><Link className="btn btn--small" href={`/reports/${p.id}`}>{p.status === "NEEDS_REVIEW" ? "Review" : "Open"}</Link></td>
+                      <td data-label="Read by" className="small">{readerLabel(p)}</td>
+                      <td data-label="Received" className="small nowrap">{fmtDateTime(p.created_at)}</td>
+                      <td data-label="Action"><Link className="btn btn--small" href={`/reports/${p.id}`}>{p.status === "NEEDS_REVIEW" ? "Review" : "Open"}</Link></td>
                     </tr>
                   );
                 })}

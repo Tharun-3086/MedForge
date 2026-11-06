@@ -26,6 +26,7 @@ def _test_url() -> str:
 TEST_URL = _test_url()
 os.environ.update({
     "DATABASE_URL": TEST_URL, "TASKS_EAGER": "true", "RATE_LIMITS_ENABLED": "false", "INLINE_SCHEDULER": "false", "DEMO_MODE": "true",
+    "PATIENT_OTP_PROVIDER": "development", "TWILIO_ACCOUNT_SID": "", "TWILIO_AUTH_TOKEN": "", "TWILIO_VERIFY_SERVICE_SID": "",
     "APP_ENV": "test", "LLM_PROVIDER": "rules", "ASR_PROVIDER": "none", "TTS_PROVIDER": "none",
     "DOC_PROVIDER": "local", "OCR_PROVIDER": "local", "UNLIMITED_OCR_RUNTIME": "vllm",
     "SARVAM_API_KEY": "", "OPENAI_API_KEY": "", "WHATSAPP_ENABLED": "false",
