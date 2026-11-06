@@ -285,6 +285,10 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
         candidates = rules.extract_document(blocks)
         extractor, model_version = "rules", "rules-v1"
     fields = validate_fields(candidates, blocks, today)
+    from app.services.health_readings import extract as extract_readings
+    for name,(value,quote,block_id) in extract_readings(blocks).items():
+        fields.append(FieldProposal(name,value,quote,"UNVERIFIED",None,
+            {"quote":quote,"block_ids":[block_id] if block_id else []},["VERIFY_MEASUREMENT_AGAINST_ORIGINAL"]))
     return DocResult(blocks, pages, fields, ocr, extractor, model_version, notes)
 
 

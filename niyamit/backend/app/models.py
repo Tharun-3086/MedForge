@@ -135,6 +135,17 @@ class Patient(Base):
     created_at: Mapped[datetime] = created()
 
 
+class PatientPriority(Base):
+    __tablename__ = "patient_priorities"
+    patient_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("patients.id"), primary_key=True)
+    clinic_id: Mapped[uuid.UUID] = clinic_fk()
+    priority: Mapped[str] = mapped_column(String(20))
+    reason: Mapped[str] = mapped_column(String(500))
+    readings_hash: Mapped[str] = mapped_column(String(64))
+    assessed_by: Mapped[str] = mapped_column(String(160))
+    assessed_at: Mapped[datetime] = created()
+
+
 class ConsentRecord(Base):
     __tablename__ = "consent_records"
     id: Mapped[uuid.UUID] = pk()

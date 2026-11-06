@@ -14,3 +14,7 @@
 .document-analysis { border-top: 1px solid var(--rule); padding-top: 14px; overflow-wrap: anywhere; }
 .document-analysis summary { cursor: pointer; }
 .document-analysis h3 { font-size: 17px; }
+
+.health-readings { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:12px; }
+.health-reading { border:1px solid var(--rule); border-radius:20px; padding:16px; min-width:0; overflow-wrap:anywhere; }
+.health-reading-value { font-size:26px; font-weight:700; color:var(--ink); }

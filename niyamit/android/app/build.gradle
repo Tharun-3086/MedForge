@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+ namespace 'com.niyamit.app'
+ compileSdk { version = release(37) { minorApiLevel = 0 } }
+ buildToolsVersion '36.0.0'
+ defaultConfig { applicationId 'com.niyamit.app'; minSdk 29; targetSdk 36; versionCode 1; versionName '0.1-demo' }
+ buildTypes { debug { manifestPlaceholders = [cleartext:'true'] }; release { manifestPlaceholders = [cleartext:'false'] } }
+ compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
+
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+ doFirst {
+  def text = file('src/main/res/values/config.xml').text
+  if (!text.contains('https://')) throw new GradleException('Release builds require a stable HTTPS app_url; localhost is debug only.')
+ }
+}

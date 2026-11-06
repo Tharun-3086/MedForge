@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ReplyResult, type ReplyView } from "@/components/patient/reply-result";
 import { VoiceRecorder } from "@/components/patient/voice";
 import { CareActions, CareNavigation, type CareDestination } from "@/components/patient/care-navigation";
+import { HealthReadings } from "@/components/patient/health-readings";
 import { DocumentAnalysis } from "@/components/patient/document-analysis";
 import { BarrierPicker, FamilyView, PassportView, ReportUpload } from "@/components/patient/views";
 import { BrandMark } from "@/components/ui";
@@ -196,6 +197,7 @@ export default function PatientApp() {
             <h1>{t(lang, "hello", { name: home.patient.first_name })}</h1>
             <button className="pt-link" onClick={async () => { await api("/v1/p/logout", {method:"POST"}); router.replace("/patient"); }}>{lang === "hi" ? "साइन आउट" : lang === "te" ? "సైన్ అవుట్" : "Sign out"}</button>
             <CareActions lang={lang} onSelect={navigateCare} />
+            <HealthReadings lang={lang} />
             <DocumentAnalysis lang={lang} onRefresh={loadHome} />
             {home.patient.opted_out ? (
               <div className="notice">{t(lang, "remindersOff")} <button className="pt-link" onClick={() => choose("START")}>{t(lang, "startReminders")}</button></div>

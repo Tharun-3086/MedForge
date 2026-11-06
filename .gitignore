@@ -16,3 +16,12 @@ __pycache__/
 
 *.dump
 *.bak
+
+# Android outputs and machine-local signing/configuration
+*.apk
+*.aab
+*.idsig
+*.keystore
+*.jks
+local.properties
+.gradle/

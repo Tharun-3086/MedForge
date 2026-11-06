@@ -1,5 +1,6 @@
 "use client";
 
+import { PriorityQueue } from "@/components/priority-queue";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -24,7 +25,7 @@ function plural(n: number, one: string, many: string) {
 }
 
 export default function TodayPage() {
-  const { counts, refreshCounts } = useStaff();
+  const { me, counts, refreshCounts } = useStaff();
   const toast = useToast();
   const [view, setView] = useState<View>("attention");
   const [queue, setQueue] = useState("");
@@ -66,6 +67,7 @@ export default function TodayPage() {
           </>
         ) : null}
       />
+      {["ADMIN","DOCTOR","NURSE"].includes(me.user.role) ? <PriorityQueue /> : null}
       {counts && counts.urgent_open > 0 ? (
         <p className="notice notice--fail" style={{ marginBottom: 14 }}>
           {plural(counts.urgent_open, "possible urgent concern is", "possible urgent concerns are")} waiting for a clinician.{" "}
