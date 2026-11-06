@@ -4,12 +4,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import io
+import re
 import time
 import uuid
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException
 
@@ -118,6 +120,8 @@ def validate_document(data: bytes, filename: str) -> ValidatedFile:
         Image.MAX_IMAGE_PIXELS = settings.max_image_pixels
         try:
             with Image.open(io.BytesIO(data)) as im:
+                if im.width * im.height > settings.max_image_pixels:
+                    raise ValueError("Image exceeds pixel limit")
                 im.verify()
         except Exception:  # noqa: BLE001 - includes DecompressionBombError
             raise HTTPException(415, "The image could not be read or is too large.") from None
@@ -139,28 +143,78 @@ def validate_audio(data: bytes, filename: str) -> ValidatedFile:
 
 def store(clinic_id: uuid.UUID, object_id: uuid.UUID, data: bytes) -> str:
     rel = f"{clinic_id}/{object_id}.bin"
-    path = Path(settings.storage_dir) / rel
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(_fernet.encrypt(data))
+    _validate_key(rel)
+    encrypted = _fernet.encrypt(data)
+    if settings.storage_provider == "supabase":
+        _remote("POST", rel, content=encrypted,
+                headers={"Content-Type": "application/octet-stream", "x-upsert": "false"})
+    else:
+        path = Path(settings.storage_dir) / rel
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(encrypted)
+        except OSError:
+            raise StorageUnavailable("File write failed") from None
     return rel
 
 
 class StorageUnavailable(Exception):
-    """The stored file is missing or cannot be decrypted (for example after SECRET_KEY was changed)."""
+    """Storage failed, the file is missing, or its encryption key no longer matches."""
+
+
+def _validate_key(key: str) -> None:
+    # All existing artifact keys are UUID/UUID.bin. Never allow paths or query strings from callers.
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}/[0-9a-fA-F-]{36}\.bin", key):
+        raise StorageUnavailable("Invalid object key")
+    try:
+        clinic, obj = key.removesuffix(".bin").split("/")
+        uuid.UUID(clinic)
+        uuid.UUID(obj)
+    except ValueError:
+        raise StorageUnavailable("Invalid object key") from None
+
+
+def _remote(method: str, key: str, *, authenticated: bool = False, **kwargs) -> bytes:
+    _validate_key(key)
+    url = (settings.supabase_url.rstrip("/") + "/storage/v1/object/"
+           + ("authenticated/" if authenticated else "")
+           + settings.supabase_storage_bucket + "/" + key)
+    headers = {"Authorization": f"Bearer {settings.supabase_service_role_key}",
+               "apikey": settings.supabase_service_role_key, **kwargs.pop("headers", {})}
+    try:
+        # Do not follow redirects with the service key or include provider bodies/URLs in exceptions.
+        with httpx.Client(timeout=settings.storage_timeout_seconds, follow_redirects=False) as client:
+            response = client.request(method, url, headers=headers, **kwargs)
+        if method == "DELETE" and response.status_code == 404:
+            return b""
+        if not response.is_success:
+            raise StorageUnavailable("Remote storage request failed")
+        return response.content
+    except httpx.HTTPError:
+        raise StorageUnavailable("Remote storage connection failed") from None
 
 
 def load(storage_key: str) -> bytes:
-    path = Path(settings.storage_dir) / storage_key
+    _validate_key(storage_key)
     try:
-        return _fernet.decrypt(path.read_bytes())
-    except (InvalidToken, FileNotFoundError) as exc:
-        raise StorageUnavailable(type(exc).__name__) from None
+        encrypted = (_remote("GET", storage_key, authenticated=True)
+                     if settings.storage_provider == "supabase"
+                     else (Path(settings.storage_dir) / storage_key).read_bytes())
+        return _fernet.decrypt(encrypted)
+    except (InvalidToken, OSError):
+        raise StorageUnavailable("File missing or encryption key does not match") from None
 
 
 def delete(storage_key: str) -> None:
+    _validate_key(storage_key)
+    if settings.storage_provider == "supabase":
+        _remote("DELETE", storage_key)
+        return
     path = Path(settings.storage_dir) / storage_key
-    if path.exists():
-        path.unlink()
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        raise StorageUnavailable("File deletion failed") from None
 
 
 def sign(object_id: str, ttl_seconds: int = 300) -> str:

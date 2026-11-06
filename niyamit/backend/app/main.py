@@ -82,8 +82,8 @@ async def invalid_transition(_: Request, exc: InvalidTransition) -> JSONResponse
 
 @app.exception_handler(StorageUnavailable)
 async def storage_unavailable(_: Request, exc: StorageUnavailable) -> JSONResponse:
-    return JSONResponse({"detail": "The stored file cannot be read (it is missing, or the encryption key changed)."},
-                        status_code=410)
+    return JSONResponse({"detail": "File storage is unavailable or the file cannot be read. Please try again or contact the clinic."},
+                        status_code=503)
 
 
 @app.get("/healthz")

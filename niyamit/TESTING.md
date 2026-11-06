@@ -89,3 +89,6 @@ SDK-only debug APK build and apksigner verification passed. Installed and launch
 Clinic priority tests cover clinic/role restrictions, required reasons, no automatic classification of extreme unverified OCR, blocking routine before verification, and reassessment when report revisions change. Full suite before the final revision/pending refinements: 139 passed; focused priority/readings checks rerun afterward.
 
 Final mobile browser acceptance passed: nurse saves a reasoned High priority assessment, filters the High queue, sees unverified reading labels and has no horizontal overflow. Updated frontend production build passed. Six focused priority/readings tests passed after the report-revision and pending-report refinements. No clinical numeric rules, emergency alerts or automatic care deadlines were enabled.
+## Render/Supabase storage checks
+
+`backend/tests/test_remote_storage.py` uses mocked Supabase HTTP responses and real local PostgreSQL/Tesseract. It verifies encrypted private upload/download/delete, invalid-key rejection, failures without local fallback, patient upload through clinic field review and patient results, cross-clinic denial, table protections, and repeatable Render preparation. Follow [RENDER_FREE.md](RENDER_FREE.md) for actual hosted acceptance, including file persistence after a backend restart.
