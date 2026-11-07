@@ -17,7 +17,7 @@ def test_sms_login_no_code_exposure_and_single_use(nurse,sms,monkeypatch):
     phone='+919000480001';new_patient(nurse,'SMS Test',phone)
     monkeypatch.setattr(twilio_verify,'send',lambda phone:'VE'+'3'*32)
     monkeypatch.setattr(twilio_verify,'check',lambda sid,code:code=='123456')
-    assert nurse.get('/v1/p/otp/config').json()=={'available':True,'development':False}
+    assert nurse.get('/v1/p/otp/config').json()=={'available':True,'development':False,'demo_available':True}
     challenge=nurse.post('/v1/p/otp/request',json={'phone':phone}).json()
     assert 'development_code' not in challenge and challenge['mode']=='twilio'
     data={'phone':phone,'challenge_id':challenge['challenge_id'],'code':'000000'}

@@ -135,11 +135,16 @@ def test_twilio_limit_exposes_safe_retry_time_without_provider_body(monkeypatch,
     assert 'secret' not in error.value.detail
 
 
-def test_twilio_trial_restriction_is_actionable(monkeypatch):
+@pytest.mark.parametrize('demo', [True, False])
+def test_twilio_trial_restriction_is_actionable(monkeypatch, demo):
+    monkeypatch.setattr(settings, 'demo_mode', demo)
+    monkeypatch.setattr(settings, 'app_env', 'test')
     monkeypatch.setattr(httpx, 'post', lambda *a, **k: httpx.Response(400, json={'code': 21608, 'message': 'secret provider details'}))
     with pytest.raises(HTTPException) as error:
         twilio_verify.send('+919000510006')
-    assert error.value.status_code == 422 and 'Twilio trial' in error.value.detail
+    assert error.value.status_code == 422 and 'Ask the admin to add your phone number' in error.value.detail
+    assert 'enable SMS OTP access' in error.value.detail
+    assert ('Try demo patient' in error.value.detail) is demo
     assert 'secret' not in error.value.detail
 
 

@@ -21,7 +21,7 @@ from app.config import settings
 from app.context import correlation_id
 from app.db import get_db, utcnow
 from app.enums import CLINICAL_ROLES, Role
-from app.models import AuditEvent, CaregiverGrant, Membership, Patient, User
+from app.models import AuditEvent, CaregiverGrant, Clinic, Membership, Patient, User
 
 log = logging.getLogger("niyamit.security")
 
@@ -117,6 +117,7 @@ class Staff:
 class PatientPrincipal:
     patient_id: uuid.UUID
     clinic_id: uuid.UUID
+    demo: bool = False
 
 
 @dataclass
@@ -172,7 +173,13 @@ def current_patient(request: Request, db: Session = Depends(get_db)) -> PatientP
     patient = db.get(Patient, uuid.UUID(data["sub"]))
     if patient is None or str(patient.clinic_id) != data["cid"]:
         raise HTTPException(status_code=401, detail="Session is not valid.")
-    return PatientPrincipal(patient.id, patient.clinic_id)
+    demo = data.get("demo") is True
+    if demo:
+        clinic = db.get(Clinic, patient.clinic_id)
+        if (not settings.demo_mode or settings.is_production or not patient.is_synthetic
+                or clinic is None or not clinic.is_synthetic):
+            raise HTTPException(status_code=401, detail="Demo session is no longer available.")
+    return PatientPrincipal(patient.id, patient.clinic_id, demo)
 
 
 def current_caregiver(request: Request, db: Session = Depends(get_db)) -> CaregiverPrincipal:
