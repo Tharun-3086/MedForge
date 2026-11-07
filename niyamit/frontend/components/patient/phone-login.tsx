@@ -10,6 +10,12 @@ type Challenge = {
 };
 type Pending = { phone: string; challenge: Challenge | null; expiresAt: number; retryAt: number; checkRetryAt: number };
 const PENDING_KEY = "niyamit-patient-otp-v2";
+function normalizedPhone(value: string) {
+  const compact = value.replace(/[\s()-]/g, "");
+  if (/^[6-9]\d{9}$/.test(compact)) return `+91${compact}`;
+  if (compact.startsWith("+91")) return /^\+91[6-9]\d{9}$/.test(compact) ? compact : "";
+  return /^\+[1-9]\d{7,14}$/.test(compact) ? compact : "";
+}
 const countdown = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 function remember(value: Pending | null) {
   try {
@@ -23,9 +29,9 @@ function remember(value: Pending | null) {
 
 export function PhoneLogin() {
   const router = useRouter();
-  const { data: config } = useApi<{available:boolean;development:boolean;demo_available?:boolean}>("/v1/p/otp/config");
+  const { data: config, error: configError, loading: configLoading, reload: reloadConfig } = useApi<{available:boolean;development:boolean;demo_available?:boolean}>("/v1/p/otp/config");
   const [demoBusy,setDemoBusy] = useState(false);
-  const [phone,setPhone] = useState("");
+  const [phone,setPhone] = useState("+91 ");
   const [code,setCode] = useState("");
   const [challenge,setChallenge] = useState<Challenge|null>(null);
   const [profiles,setProfiles] = useState<{id:string;clinic:string}[]>([]);
@@ -39,6 +45,7 @@ export function PhoneLogin() {
   const wait = Math.max(0, Math.ceil((retryAt-now)/1000));
   const checkWait = Math.max(0, Math.ceil((checkRetryAt-now)/1000));
   const expired = Boolean(challenge && expiresAt && now >= expiresAt);
+  const validPhone = normalizedPhone(phone);
 
   useEffect(() => {
     try {
@@ -77,10 +84,10 @@ export function PhoneLogin() {
   }
 
   async function requestCode() {
-    if (inFlight.current || wait > 0) return;
+    if (inFlight.current || wait > 0 || !validPhone || !config?.available) return;
     inFlight.current = true; setBusy(true); setError(null);
     try {
-      const next = await api<Challenge>("/v1/p/otp/request", {body:{phone}});
+      const next = await api<Challenge>("/v1/p/otp/request", {body:{phone:validPhone}});
       const current = Date.now();
       const nextRetry = current + next.resend_after_seconds*1000;
       const nextExpiry = current + (next.expires_in_seconds ?? 300)*1000;
@@ -98,7 +105,7 @@ export function PhoneLogin() {
     inFlight.current = true; setBusy(true); setError(null);
     try {
       const result = await api<{authenticated:boolean;profiles?:{id:string;clinic:string}[];message?:string}>(
-        "/v1/p/otp/verify", {body:{phone,code,challenge_id:challenge.challenge_id}});
+        "/v1/p/otp/verify", {body:{phone:validPhone,code,challenge_id:challenge.challenge_id}});
       remember(null); setCode("");
       if (result.authenticated) router.push("/patient/dashboard");
       else {
@@ -133,7 +140,7 @@ export function PhoneLogin() {
   }
 
   return <section className="stack">
-    {config?.demo_available ? <div className="notice stack">
+    {config?.demo_available ? <div id="demo-patient" className="notice stack">
       <h2>Explore the patient demo</h2>
       <p>Try Ramesh Kumar at Sunrise Clinic without a phone number or SMS code.</p>
       <button type="button" className="btn" disabled={busy} onClick={()=>void openDemo()}>{demoBusy ? "Opening demo…" : "Try demo patient — no OTP"}</button>
@@ -141,11 +148,16 @@ export function PhoneLogin() {
     </div> : null}
     <h2>Sign in with your phone</h2>
     <p className="muted">Use the number registered with your clinic. If you are new, ask the admin to add your phone number and enable SMS OTP access.</p>
+    {configLoading ? <p role="status" className="small">Connecting to phone login… The service may take a moment to wake up.</p> : null}
+    {configError ? <div className="notice stack" role="status"><p>Could not connect to phone login. Please retry in a moment.</p><button type="button" className="btn btn--quiet" disabled={configLoading} onClick={()=>void reloadConfig()}>Retry connection</button></div> : null}
+    {config && !config.demo_available ? <p className="small muted">The demo patient is disabled on this deployment. Use your registered phone number or clinic link.</p> : null}
     {config?.development ? <p className="notice">Development test login — no SMS is sent. Test codes appear here and only open synthetic records.</p> : null}
     {config && !config.available ? <p className="notice">Phone login is not configured. Use your clinic link below.</p> : null}
     {profiles.length ? <div className="stack"><h3>Choose your clinic</h3>{profiles.map(p=><button key={p.id} className="btn" disabled={busy} onClick={()=>void choose(p.id)}>{p.clinic}</button>)}</div> : <form className="stack" onSubmit={verify}>
-      <label className="field"><span>Phone number</span><input type="tel" autoComplete="tel" placeholder="+91 90000 00000" required value={phone}
+      <label className="field"><span>Phone number</span><input type="tel" inputMode="tel" autoComplete="tel" placeholder="+91 90000 00000" required value={phone} aria-describedby="phone-help"
+        onPaste={e=>{const pasted=normalizedPhone(e.clipboardData.getData("text"));if(pasted&&!challenge&&!busy){e.preventDefault();setPhone(pasted);setRetryAt(0);setCheckRetryAt(0);remember(null);}}}
         disabled={Boolean(challenge)||busy} onChange={e=>{setPhone(e.target.value);setRetryAt(0);setCheckRetryAt(0);remember(null);}}/></label>
+      <p id="phone-help" className="small muted">India (+91) is selected by default. Enter your 10-digit mobile number, or change the country code for another country.</p>
       {challenge ? <>
         <p role="status">{challenge.message}</p>
         {challenge.development_code ? <p className="notice"><b>Development code: <span data-testid="development-code">{challenge.development_code}</span></b><br/>Expires in 5 minutes. This is not proof of phone ownership.</p> : null}
@@ -153,7 +165,7 @@ export function PhoneLogin() {
         <label className="field"><span>6-digit code</span><input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required
           value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))}/></label>
       </> : null}
-      <button className="btn" disabled={busy||!config?.available||(challenge ? expired||checkWait>0 : wait>0)}>
+      <button className="btn" disabled={busy||configLoading||!config?.available||(challenge ? expired||checkWait>0 : wait>0||!validPhone)}>
         {busy ? "Please wait…" : challenge ? checkWait>0 ? `Verify again in ${countdown(checkWait)}` : "Verify and sign in" : wait>0 ? `Try again in ${countdown(wait)}` : config?.development ? "Get test code" : "Send SMS code"}
       </button>
       {challenge ? <div className="row">
