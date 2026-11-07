@@ -4,6 +4,14 @@ Patient care and clinic coordination in one responsive web application. The shar
 
 ## Free hosted demo
 
+### Patient demo without SMS
+
+Open `/patient` and choose **Try demo patient — no OTP**. This opens the fixed seeded Ramesh Kumar record (`SDC-1001`) at Sunrise Clinic. Sign in as demo clinic staff to review that same patient's uploads and replies. All testers share this account and can see its activity, so upload fictional documents only. Sign out before testing your own phone login.
+
+The backend must run with `DEMO_MODE=true` and a non-production `APP_ENV`, with the standard synthetic seed data already present. No new environment variable, SMS provider call or database migration is needed. The endpoint cannot select arbitrary patients. It checks both patient and clinic synthetic flags, and existing demo sessions stop working if demo mode is disabled, production is enabled, or either flag changes. Keep `DEMO_MODE=false` for real-patient production.
+
+After merging, deploy both the backend and frontend on Render. The hosted Android WebView uses the updated website without an APK rebuild when its server URL is unchanged.
+
 For a three-minute patient OTP, report scan and clinic-review recording, follow [DEMO_VIDEO.md](DEMO_VIDEO.md). It includes narration and clearly synthetic report fixtures.
 
 See [RENDER_FREE.md](RENDER_FREE.md) for Render Free with Supabase PostgreSQL and a private encrypted `niyamit-artifacts` bucket. The profile runs migrations and synthetic seeding before starting one API process. Free services sleep; it is a demo, with hosted acceptance still required. Local Docker storage remains the default.

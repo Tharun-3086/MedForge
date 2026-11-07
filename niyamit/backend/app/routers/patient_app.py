@@ -127,7 +127,29 @@ class OtpVerifyIn(OtpRequestIn):
 
 @router.get("/otp/config")
 def otp_config():
-    return {"available": patient_otp.available(), "development": patient_otp.development()}
+    return {"available": patient_otp.available(), "development": patient_otp.development(),
+            "demo_available": settings.demo_mode and not settings.is_production}
+
+
+@router.post("/demo-login")
+def demo_login(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Public demonstration entry for one fixed, seeded synthetic record only."""
+    if not settings.demo_mode or settings.is_production:
+        raise HTTPException(404, "Not found.")
+    rate_limit(f"patient-demo:{client_ip(request)}", 30, 60)
+    patient = db.scalar(select(Patient).join(Clinic, Clinic.id == Patient.clinic_id).where(
+        Clinic.name == "Sunrise Diabetes Clinic (Synthetic)", Clinic.is_synthetic.is_(True),
+        Patient.is_synthetic.is_(True), Patient.external_ref == "SDC-1001",
+        Patient.phone_e164 == "+919000000101", Patient.display_name == "Ramesh Kumar",
+    ))
+    if patient is None:
+        raise HTTPException(409, "The seeded demo patient is unavailable. Ask the demo owner to check the synthetic demo data.")
+    response.delete_cookie("nyt_patient_choice", path="/")
+    set_cookie(response, PATIENT_COOKIE, issue_session("patient", str(patient.id), str(patient.clinic_id), demo=True))
+    audit(db, clinic_id=patient.clinic_id, action="PATIENT_DEMO_LOGIN", actor_type=ActorType.PATIENT,
+          actor_id=str(patient.id), patient_id=patient.id, detail={"mode": "synthetic-demo"})
+    db.commit()
+    return {"authenticated": True}
 
 
 @router.post("/otp/request")
@@ -226,7 +248,7 @@ def logout(response: Response) -> dict:
 @router.get("/home")
 def home(me: PatientPrincipal = Depends(current_patient), db: Session = Depends(get_db)) -> dict:
     patient, clinic = _ctx(db, me)
-    return home_payload(db, patient, clinic)
+    return {**home_payload(db, patient, clinic), "demo_session": me.demo}
 
 
 class ProfileIn(BaseModel):

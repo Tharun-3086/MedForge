@@ -34,7 +34,10 @@ def request(path, data):
             except (ValueError, TypeError, AttributeError):
                 provider_code = 0
             if provider_code == 21608:
-                raise HTTPException(422, "This phone number is not enabled for SMS on the clinic's Twilio trial. Ask the clinic to verify this recipient in Twilio.")
+                message = "Ask the admin to add your phone number and enable SMS OTP access. Then try again."
+                if settings.demo_mode and not settings.is_production:
+                    message += " For testing, choose 'Try demo patient — no OTP' to use the fixed demo patient, Ramesh Kumar at Sunrise Clinic."
+                raise HTTPException(422, message)
             raise HTTPException(503, "SMS verification is unavailable. Try later or contact your clinic.",
                                 headers={"Retry-After": "60"})
         return response.json()

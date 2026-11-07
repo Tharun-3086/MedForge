@@ -17,6 +17,7 @@ import { asLang, dueText, LANGS, t, tItemKind, type Lang } from "@/lib/i18n";
 import type { Item } from "@/lib/types";
 
 type Home = {
+  demo_session?: boolean;
   patient: { first_name: string; language: string; opted_out: boolean };
   clinic: { name: string; short_name: string; phone: string };
   items: Item[];
@@ -190,6 +191,7 @@ export default function PatientApp() {
     <main className="pt">
       <div className="pt-wrap">
         {top}
+        {home.demo_session ? <p role="status" className="notice">Shared patient demo — fictional data only. Other testers can see this account’s activity. Sign out to use your own phone login.</p> : null}
         <Link href="/" className="pt-link">{lang === "hi" ? "ऐप चुनें: मरीज़ या क्लिनिक" : lang === "te" ? "యాప్ ఎంచుకోండి: రోగి లేదా క్లినిక్" : "Switch Patient / Clinic"}</Link>
         {problem ? <p role="alert" className="notice notice--fail">{problem}</p> : null}
         {view === "home" ? (

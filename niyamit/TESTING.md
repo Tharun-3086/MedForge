@@ -104,3 +104,12 @@ The live image upload/clinic date review/plan approval flow also passed. A later
 Full backend suite for this update: 171 passed. Tests cover cooldown taps without allowance consumption, five successful sends per hour, reset after an hour, persistence independent of process counters, twelve different phones behind one network, send failure rollback, provider throttles without incorrect-code penalties, safe Retry-After headers and trial-recipient explanations. No real SMS is sent in automated tests.
 
 Frontend type checking and production build passed. Browser tests with mocked API responses verify normal pending-code restore, resend timing, hourly throttle persistence through reload, provider-check cooldown and expiry, and absence of entered/development codes in session storage. No automatic SMS resend occurs on reload. Real provider delivery on the retry patch remains a post-deployment manual check.
+## Patient demo without OTP
+
+- With synthetic seed data and `DEMO_MODE=true` outside production, open `/patient` and click **Try demo patient — no OTP** without entering a phone number. Confirm Ramesh's Sunrise Clinic dashboard and shared-demo notice appear, without receiving SMS.
+- Upload a fictional report or send a test reply. Open Ramesh (`SDC-1001`) in the demo clinic interface and check the same activity. Sign out and verify the dashboard requires authentication again.
+- The API regression suite `tests/test_patient_demo_login.py` checks no SMS calls, fixed-record selection, patient-only access, audit/logout, CSRF, disabled/production mode, missing seed records and immediate revocation when synthetic flags change.
+
+Validation on 7 November 2026: the full PostgreSQL/Alembic backend suite passed **179 tests** in a disposable test container against the separate test database. Updated the existing SMS config assertion to include `demo_available`. Frontend type-check and production build passed, and the local backend/frontend/worker Docker images rebuilt successfully.
+
+Real local mobile-browser checks passed through the Next.js proxy and PostgreSQL-backed API: one-click demo entry without SMS, Ramesh's Sunrise Clinic dashboard, shared-account notice, HttpOnly cookie, clinic-only access denied, no horizontal overflow, demo staff finding the same patient, and logout revoking dashboard access. The earlier two mocked mobile cases also cover hiding demo entry when disabled. No live SMS was sent. Live Render acceptance remains a post-deployment check; no Git push or hosted deployment was performed.

@@ -23,7 +23,8 @@ function remember(value: Pending | null) {
 
 export function PhoneLogin() {
   const router = useRouter();
-  const { data: config } = useApi<{available:boolean;development:boolean}>("/v1/p/otp/config");
+  const { data: config } = useApi<{available:boolean;development:boolean;demo_available?:boolean}>("/v1/p/otp/config");
+  const [demoBusy,setDemoBusy] = useState(false);
   const [phone,setPhone] = useState("");
   const [code,setCode] = useState("");
   const [challenge,setChallenge] = useState<Challenge|null>(null);
@@ -121,9 +122,25 @@ export function PhoneLogin() {
     setRetryAt(0); setCheckRetryAt(0); setExpiresAt(0); setNow(Date.now());
   }
 
+  async function openDemo() {
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true); setDemoBusy(true); setError(null);
+    try {
+      await api("/v1/p/demo-login", {method:"POST"});
+      remember(null); setCode(""); router.push("/patient/dashboard");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not open the demo patient."); }
+    finally { inFlight.current = false; setBusy(false); setDemoBusy(false); }
+  }
+
   return <section className="stack">
+    {config?.demo_available ? <div className="notice stack">
+      <h2>Explore the patient demo</h2>
+      <p>Try Ramesh Kumar at Sunrise Clinic without a phone number or SMS code.</p>
+      <button type="button" className="btn" disabled={busy} onClick={()=>void openDemo()}>{demoBusy ? "Opening demo…" : "Try demo patient — no OTP"}</button>
+      <p className="small">Shared synthetic account. Other testers can see demo activity. Upload fictional documents only.</p>
+    </div> : null}
     <h2>Sign in with your phone</h2>
-    <p className="muted">Use the number registered with your clinic. No patient link is needed.</p>
+    <p className="muted">Use the number registered with your clinic. If you are new, ask the admin to add your phone number and enable SMS OTP access.</p>
     {config?.development ? <p className="notice">Development test login — no SMS is sent. Test codes appear here and only open synthetic records.</p> : null}
     {config && !config.available ? <p className="notice">Phone login is not configured. Use your clinic link below.</p> : null}
     {profiles.length ? <div className="stack"><h3>Choose your clinic</h3>{profiles.map(p=><button key={p.id} className="btn" disabled={busy} onClick={()=>void choose(p.id)}>{p.clinic}</button>)}</div> : <form className="stack" onSubmit={verify}>
@@ -146,6 +163,7 @@ export function PhoneLogin() {
       {wait>0 ? <p className="small" data-testid="otp-retry-countdown">You can request another code in {countdown(wait)}. Check your SMS for the latest code.</p> : null}
     </form>}
     <ErrorNote error={error}/>
-    <p className="small muted">New patient? Ask your clinic to register your number. Verification does not automatically share your records with another clinic.</p>
+    <p className="small muted">New patient? Ask the admin to add your phone number and enable SMS OTP access. Verification does not automatically share your records with another clinic.</p>
+    {config?.demo_available ? <p className="small muted">Here for testing? Choose “Try demo patient — no OTP” above to open the fixed demo patient, Ramesh Kumar at Sunrise Clinic. You do not need to add your own number.</p> : null}
   </section>;
 }

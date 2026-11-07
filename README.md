@@ -8,6 +8,8 @@ The [Render Free + Supabase guide](niyamit/RENDER_FREE.md) covers persistent enc
 
 **Current release: deployable synthetic-data demo.** Twilio SMS login has been tested by the user. Subscriptions simulate billing and collect no money. Real-patient production requires the acceptance gates in the deployment guide.
 
+On the Patient sign-in page, **Try demo patient — no OTP** opens the seeded Ramesh Kumar record at Sunrise Clinic without SMS. This is a shared synthetic account: use fictional uploads only. The entry is available only with `DEMO_MODE=true` outside production. Real patient phone sign-in still uses OTP.
+
 ## Android, health readings and clinic priority
 
 - **Android debug app:** an installable Android 10+ WebView shell for the shared Patient/Clinic interface. Includes launcher branding, navigation, file/camera handling and microphone permission handling. It requires the running web backend. Emulator launch, patient login screen and clinic login were checked; physical-device acceptance remains outstanding. [Android build and installation](niyamit/android/README.md).
