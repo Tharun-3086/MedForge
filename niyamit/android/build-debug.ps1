@@ -1,7 +1,9 @@
 param(
  [string]$Sdk = "D:\Android\Sdk",
  [string]$Jdk = "D:\androidstd\jbr",
- [string]$AppUrl = "http://localhost:3000/"
+ [string]$AppUrl = "http://localhost:3000/",
+ [ValidateRange(1,2147483647)][int]$VersionCode = 2,
+ [ValidatePattern('^[0-9A-Za-z.-]+$')][string]$VersionName = "0.2-demo"
 )
 $ErrorActionPreference = "Stop"
 $env:JAVA_HOME = $Jdk
@@ -20,7 +22,7 @@ $escaped = [System.Security.SecurityElement]::Escape($AppUrl)
 $manifest = [IO.File]::ReadAllText("$project/app/src/main/AndroidManifest.xml").Replace('${cleartext}', 'true').Replace('<manifest ', '<manifest package="com.niyamit.app" ').Replace('<application ', '<application android:debuggable="true" ')
 [IO.File]::WriteAllText("$out/AndroidManifest.xml",$manifest)
 & "$tools/aapt2.exe" compile --dir "$out/res" -o "$out/resources.zip"; Check-Exit
-& "$tools/aapt2.exe" link -o "$out/resources.apk" -I $platform --manifest "$out/AndroidManifest.xml" --java "$out/gen" --min-sdk-version 29 --target-sdk-version 36 --version-code 1 --version-name "0.1-demo" "$out/resources.zip"; Check-Exit
+& "$tools/aapt2.exe" link -o "$out/resources.apk" -I $platform --manifest "$out/AndroidManifest.xml" --java "$out/gen" --min-sdk-version 29 --target-sdk-version 36 --version-code $VersionCode --version-name $VersionName "$out/resources.zip"; Check-Exit
 $sources = @(Get-ChildItem "$project/app/src/main/java","$out/gen" -Recurse -Filter *.java | ForEach-Object {$_.FullName})
 & "$Jdk/bin/javac.exe" -encoding UTF-8 -source 8 -target 8 -bootclasspath "$platform;$tools/core-lambda-stubs.jar" -d "$out/classes" @sources; Check-Exit
 & "$Jdk/bin/jar.exe" cf "$out/classes.jar" -C "$out/classes" .; Check-Exit

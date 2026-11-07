@@ -106,6 +106,12 @@ Full backend suite for this update: 171 passed. Tests cover cooldown taps withou
 Frontend type checking and production build passed. Browser tests with mocked API responses verify normal pending-code restore, resend timing, hourly throttle persistence through reload, provider-check cooldown and expiry, and absence of entered/development codes in session storage. No automatic SMS resend occurs on reload. Real provider delivery on the retry patch remains a post-deployment manual check.
 ## Patient demo without OTP
 
+### Login visibility and India phone default (7 November 2026)
+
+The updated frontend production build passed. Mocked mobile-browser checks passed for the default +91 prefix, invalid/valid SMS button states, pasted national numbers, international numbers, normalized requests, connection retry, home demo links, clinic demo retry, and disabled-demo messaging. The four existing OTP cooldown cases and both patient demo cases also passed; no real SMS was sent. APK version 0.2-demo (code 2) passed signature verification and matches the previous demo signing certificate; no emulator was connected for installation testing.
+
+Live read-only checks returned HTTP 200 for the website OTP configuration (`demo_available=true`) and demo users (seven staff accounts across Sunrise Clinic and Lakeview Centre), after initial startup failures. These checks confirm existing demo availability, not deployment of the new frontend. Merge and redeploy the frontend before accepting the visibility/phone fixes on the hosted website or APK.
+
 - With synthetic seed data and `DEMO_MODE=true` outside production, open `/patient` and click **Try demo patient — no OTP** without entering a phone number. Confirm Ramesh's Sunrise Clinic dashboard and shared-demo notice appear, without receiving SMS.
 - Upload a fictional report or send a test reply. Open Ramesh (`SDC-1001`) in the demo clinic interface and check the same activity. Sign out and verify the dashboard requires authentication again.
 - The API regression suite `tests/test_patient_demo_login.py` checks no SMS calls, fixed-record selection, patient-only access, audit/logout, CSRF, disabled/production mode, missing seed records and immediate revocation when synthetic flags change.

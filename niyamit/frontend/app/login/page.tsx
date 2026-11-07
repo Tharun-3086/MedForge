@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { BrandMark, ErrorNote } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, useApi } from "@/lib/api";
 import type { Me } from "@/lib/types";
 
 type DemoUsers = { password: string; users: { email: string; name: string; role: string; clinic: string }[] };
@@ -24,11 +24,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [demo, setDemo] = useState<DemoUsers | null>(null);
-
-  useEffect(() => {
-    api<DemoUsers>("/v1/auth/demo-users").then(setDemo).catch(() => setDemo(null));
-  }, []);
+  const { data: demo, error: demoError, loading: demoLoading, reload: reloadDemo } = useApi<DemoUsers>("/v1/auth/demo-users");
 
   async function signIn(mail: string, pass: string) {
     setBusy(true);
@@ -74,11 +70,13 @@ export default function LoginPage() {
             <ErrorNote error={error} />
             <button className="btn" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
           </form>
-          <p className="small muted">Patients use their personal clinic link.</p>
+          <p className="small muted">Patients can sign in with their phone number or use a personal clinic link.</p>
         </section>
 
-        {demo ? (
-          <section className="panel stack" style={{ padding: 28 }} aria-labelledby="demo-title">
+        <section id="demo-accounts" className="panel stack" style={{ padding: 28 }} aria-labelledby="demo-title">
+          {demoLoading ? <p role="status">Loading demo clinics… The service may take a moment to wake up.</p> : null}
+          {demoError ? <div className="stack" role="status"><h2 id="demo-title">Demo clinic access</h2><p>{demoError.status === 404 ? "Demo accounts are disabled on this deployment. Use your clinic staff account to sign in." : "Could not load demo clinics. Please retry the connection in a moment."}</p>{demoError.status !== 404 ? <button className="btn btn--quiet" type="button" disabled={demoLoading} onClick={()=>void reloadDemo()}>Retry demo clinics</button> : null}</div> : null}
+        {demo ? <>
             <div className="stack" style={{ gap: 4 }}>
               <h2 id="demo-title" style={{ fontSize: 20 }}>Demo accounts</h2>
               <p className="muted small">
@@ -97,8 +95,10 @@ export default function LoginPage() {
                 ))}
               </div>
             ))}
-          </section>
-        ) : null}
+            {!demo.users.length ? <p className="notice">Demo accounts have not been seeded on this deployment. Ask the administrator to check demo setup.</p> : null}
+            <Link className="btn btn--quiet" href="/patient#demo-patient">Try the demo patient instead</Link>
+          </> : null}
+        </section>
         <p>New clinic owner? <Link href="/register-clinic">Register your clinic</Link>. Staff members: ask your administrator for an invitation.</p>
       </div>
     </main>
