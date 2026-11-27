@@ -64,12 +64,13 @@ PATIENTS_B = [
 @contextlib.contextmanager
 def _offline_inline():
     """Seeding never calls paid AI providers and runs jobs inline, so the data is deterministic."""
-    saved = (settings.tasks_eager, settings.llm_provider, settings.asr_provider, settings.doc_provider)
+    saved = (settings.tasks_eager, settings.llm_provider, settings.asr_provider, settings.doc_provider, settings.ocr_provider)
     settings.tasks_eager, settings.llm_provider, settings.asr_provider, settings.doc_provider = True, "rules", "none", "local"
+    settings.ocr_provider = "local"
     try:
         yield
     finally:
-        settings.tasks_eager, settings.llm_provider, settings.asr_provider, settings.doc_provider = saved
+        settings.tasks_eager, settings.llm_provider, settings.asr_provider, settings.doc_provider, settings.ocr_provider = saved
 
 
 def reset_database() -> None:
@@ -211,6 +212,8 @@ def seed() -> dict[str, str]:
             clinic.quiet_hours_start, clinic.quiet_hours_end = 21, 8
         db.commit()
         log.info("seed complete")
+        from app.demo_showcase import ensure_showcase
+        ensure_showcase()
         return {"clinic_a": str(a.id), "clinic_b": str(b.id), "caregiver_link": caregiver_link}
 
 
@@ -223,6 +226,8 @@ def main() -> None:
     with SessionLocal() as s:
         has_data = s.scalar(select(Clinic.id).limit(1)) is not None
     if has_data and "--force" not in sys.argv:
+        from app.demo_showcase import ensure_showcase
+        ensure_showcase()
         print("Database already has data; skipping seed. Use `python -m app.seed --force` to wipe and re-seed.")
         return
     if has_data:

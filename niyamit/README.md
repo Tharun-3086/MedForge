@@ -1,6 +1,26 @@
 # Niyamit Care Bridge
 
+The Ramesh Kumar demo now includes three watermarked fictional reports, 36
+fixture-verified measurements and dated trends. Its additive initializer preserves
+existing records. Follow [the 0.3 demo release guide](RELEASE_0.3_DEMO.md) to push,
+merge, deploy backend/frontend and publish the signed demo APK safely.
+
+Kidney results, cholesterol/triglycerides and weight now join the patient and
+clinic health summaries, with source-linked dated history and verified trends.
+See [readings and verification rules](READINGS.md) for supported units and limits.
+
 Patient care and clinic coordination in one responsive web application. The shared entry page supports separate authenticated patient/staff sessions and backend clinic isolation. The home-screen manifest launches `/`; the Android debug shell is documented below; offline records and iPhone builds are not implemented.
+
+## Hybrid OCR and handwriting
+
+The optional hybrid worker uses PaddleOCR for printed regions and experimental
+English TrOCR for line crops. Tesseract remains the fallback. Uploaders can choose
+printed, handwritten or mixed writing and English, Hindi or Telugu document text.
+Hindi/Telugu handwriting requires manual verification. Uncertain candidates keep
+source evidence and stay out of latest health readings until a doctor or nurse
+checks the original and records confirmation. [Setup and limitations](OCR.md).
+Deploy the `20261122_hybrid_ocr` migration with the backend before the new UI.
+The heavy worker is optional and separate from the small hosted API image.
 
 ## Free hosted demo
 

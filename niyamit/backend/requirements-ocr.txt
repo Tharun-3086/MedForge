@@ -1,0 +1,8 @@
+# Optional local CPU OCR worker, Python 3.12. Install torch from the official CPU
+# index first (see OCR.md). Keep these models out of the small Render API image.
+paddleocr==3.3.2
+paddlepaddle==3.2.2
+transformers==4.57.1
+sentencepiece>=0.2,<0.3
+torch==2.8.0
+torchvision==0.23.0

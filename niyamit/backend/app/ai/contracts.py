@@ -90,7 +90,10 @@ FIELD_TO_ITEM = {
     "refill_due_date": "MEDICINE_REFILL",
 }
 
+from app.services.health_readings import LABELS as HEALTH_LABELS
+
 FIELD_LABELS = {
+    **HEALTH_LABELS,
     "blood_pressure":"Blood pressure", "fasting_glucose":"Fasting glucose", "postmeal_glucose":"Post-meal glucose",
     "random_glucose":"Random glucose", "blood_glucose":"Glucose (type unspecified)", "hba1c":"HbA1c",
     "document_type": "Document type",

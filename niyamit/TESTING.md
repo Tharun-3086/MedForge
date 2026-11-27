@@ -1,5 +1,94 @@
 # Verification and manual acceptance
 
+## Final patient journey, 26 November 2026
+
+199 PostgreSQL/Alembic tests, two trend tests and final frontend build/type check
+passed. Fresh actual Docker acceptance covered login, corrupt-file rejection,
+printed/cursive/PDF reports, original download, uncertainty gating, report review
+completion, source-linked history, approved care plan, patient confirmation,
+document-task closure, clinician-recorded completion, access denial and logout.
+See [the full acceptance record](PATIENT_FLOW_CHECK.md) for fixes and manual limits.
+
+## Ramesh showcase and Android 0.3.0-demo, 26 November 2026
+
+196 PostgreSQL/Alembic tests passed, including repeated showcase initialization,
+disabled-demo protection and 36 source-verified fictional measurements across
+three dates. Render preparation remains idempotent. APK version code 3 signature
+verification passed and its SHA-256 signing certificate matches version code 2.
+No emulator was connected for install/update testing. The Git candidate scan
+found no sensitive filenames or configured secret values. No Git push, merge,
+hosted redeploy or GitHub release publication was performed by the assistant.
+
+## Extended health history, 26 November 2026
+
+194 PostgreSQL/Alembic tests passed, including extended units, uncertainty gating,
+shared patient/clinic history, reception denial and cross-clinic isolation. Two
+frontend trend tests passed for mixed units, unknown/unverified dates, inequalities
+and same-date conflicts. Production frontend build/type check passed. Actual
+Docker acceptance used two synthetic printed reports (16 reviewed measurements)
+and one synthetic cursive creatinine result verified by a doctor through the UI.
+Both interfaces displayed the same dated history and trends. See READINGS.md.
+
+## Patient health summary visibility, 22 November 2026
+
+Frontend production build/type check passed. Actual browser checks passed for
+the empty Ramesh demo and the populated hybrid QA patient: persistent HbA1c,
+glucose and BP cards above action tiles, distinct glucose type, source/report
+date and reviewed labels, and the upload shortcut. Both states fit a 390px
+viewport without horizontal overflow. The QA patient showed HbA1c 6.2 %, BP
+120/80 mmHg and source-confirmed fasting glucose 110 mg/dL. The Ramesh session
+was restored after testing. No measurements were copied between patients.
+Local Docker frontend was rebuilt/restarted; hosted Render/APK remain unchanged.
+
+## Hybrid OCR update, 22 November 2026
+
+The complete PostgreSQL/Alembic suite passed **192 tests**. Hybrid regression
+cases cover fallback, handwritten alternatives, conflicting source regions,
+per-page mixed PDFs, table-row reconstruction, crop budgets, local consent,
+regional-language restrictions, clinic-role enforcement and patient/staff review.
+The frontend production build and mobile-browser checks passed. Mocked UI checks
+exercise writing/language upload options, the patient verification warning,
+alternative source text, mandatory confirmation notes and no horizontal overflow.
+
+Actual PaddleOCR and TrOCR ran on this laptop in an isolated Python 3.12 environment
+and PostgreSQL database. The API check uploaded a printed synthetic report, read
+BP/glucose/HbA1c, uploaded a synthetic cursive-font report, kept uncertain values
+out of latest readings, rejected confirmation without a note, accepted staff
+corrections and returned the clinic-reviewed result to the patient. No real SMS
+or external document AI was used. The initial printed upload took about 15.7 s
+including model setup, and the cursive upload/review flow took about 14.8 s.
+These individual runs are not performance or clinical-accuracy benchmarks.
+
+Real Indian prescriptions, Hindi/Telugu handwriting and physical camera quality
+remain clinician/pilot acceptance work. A TrOCR smoke test misread a unit on a
+synthetic cursive line, reinforcing the need for review. See [OCR.md](OCR.md) for
+the optional worker, model preparation and the lightweight fallback configuration.
+No Git push or Render deployment has been performed for this update.
+
+After safe cache cleanup, the heavy Docker image built and ran successfully.
+An offline container smoke check exercised actual PaddleOCR, TrOCR and forced
+Tesseract fallback. The running Compose app uses the hybrid worker with cached
+models, one solo process, two CPUs and a 2,500 MB memory limit. The database was
+backed up before its additive migration. API, frontend, worker, Redis and
+PostgreSQL are running locally.
+
+Actual browser acceptance uploaded `hybrid-printed.png` and
+`hybrid-handwritten-report.png` for a new synthetic QA patient. Printed BP
+120/80 mmHg, fasting glucose 110 mg/dL and HbA1c 6.2 % appeared as unverified.
+The cursive-font sample retained the original image/boxes and both engine
+transcriptions, including TrOCR's incorrect `mg/d.` unit. Its new reading was
+withheld from latest readings, and confirmation was disabled without a note.
+A nurse confirmed the report date and saved the source-checked 110 mg/dL value;
+the patient then saw the newer dated, clinic-reviewed glucose while previous
+BP/HbA1c remained. No real patient data, SMS or external document AI was used.
+
+The pip cleaners removed about 3.84 GB from C and 0.89 GB from D; the temporary
+native model environment was reset with venv's supported clear operation.
+Future pip downloads cache under `D:/Caches/pip`. Docker's existing WSL junction
+targets `D:/Docker/wsl`; no database volume was deleted or moved. Model weights
+remain separate at `D:/niyamit/verification/ocr-models` and in the private Docker
+app-data volume. This replaces the earlier disk-blocked Docker check.
+
 ## Automated commands
 
 Run from `niyamit/`, with a disposable local stack running:

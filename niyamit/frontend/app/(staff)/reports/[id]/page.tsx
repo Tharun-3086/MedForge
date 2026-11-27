@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { EvidenceViewer } from "@/components/evidence-viewer";
-import { FIELD_TO_ITEM, PROPOSAL_STATUS, REVIEW_REASONS } from "@/components/outcomes";
+import { FIELD_TO_ITEM, PROPOSAL_STATUS, REVIEW_REASONS, OCR_VERIFICATION_REASONS } from "@/components/outcomes";
 import { PageHead } from "@/components/staff-shell";
 import { ErrorNote, Loading, Pill, Provenance, useAction } from "@/components/ui";
 import { api, usePoll, useApi } from "@/lib/api";
@@ -113,9 +113,10 @@ export default function ReviewPage() {
         <div className="stack">
           <div className="spread">
             <h2 style={{ fontSize: 19 }}>Proposed fields</h2>
-            <span className="small muted">Read by {p.extractor === "rules" ? `${p.ocr_provider === "pdf-text-layer" ? "PDF text" : "Tesseract OCR"} and offline rules` : p.extractor}</span>
+            <span className="small muted">Read by {p.ocr_provider || "document reader"} and {p.extractor || "extraction pending"}</span>
           </div>
           {open ? <p className="small muted">{unchecked > 0 ? `${unchecked} field${unchecked === 1 ? "" : "s"} still need a person to check them.` : "Every field has been checked."}</p> : null}
+          {p.blocks?.length ? <details className="panel"><summary>Machine transcription and handwriting alternatives</summary><p className="small muted">Compare with the original. Alternatives are unverified candidates, not medication instructions. OCR scores do not measure medical correctness.</p>{p.blocks.map(b=><div key={b.id} className="stack" style={{marginTop:12}}><span className="small muted">Page {b.page} · {b.engine||p.ocr_provider}</span><p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{b.text}</p>{b.alternatives?.map((a,i)=><p className="notice" key={i}>Alternative ({a.engine}): {a.text}</p>)}{b.review_reasons?.map(r=><p className="small" key={r}>{REVIEW_REASONS[r]??r}</p>)}</div>)}</details> : null}
           {p.fields.map((f) => (
             <div key={f.id} className="field-card" data-status={f.status} aria-current={f.id === active} onClick={() => setActive(f.id)}>
               <div className="spread">
@@ -132,7 +133,7 @@ export default function ReviewPage() {
               {f.evidence.computed ? <span className="small muted">{f.evidence.computed}</span> : null}
               {f.status === "APPROVED" && f.proposed_value !== f.value ? <span className="small">Corrected from {f.proposed_value ? showValue(f, f.proposed_value) : "no value"}</span> : null}
               {f.review_reasons.map((r) => <span key={r} className="small" style={{ color: "var(--amber)" }}>{REVIEW_REASONS[r] ?? r}</span>)}
-              {open && f.status !== "APPROVED" && f.status !== "REJECTED" ? (
+              {(open || p.status === "APPROVED") && f.status !== "APPROVED" && f.status !== "REJECTED" ? (
                 editing === f.id ? (
                   <div className="stack" onClick={(e) => e.stopPropagation()}>
                     {f.name === "document_type" ? (
@@ -151,7 +152,8 @@ export default function ReviewPage() {
                   </div>
                 ) : (
                   <div className="row" onClick={(e) => e.stopPropagation()}>
-                    <button className="btn btn--small" disabled={busy || !f.value} onClick={() => review(f, "APPROVE")}>Matches the original</button>
+                    {f.review_reasons.some(r=>OCR_VERIFICATION_REASONS.includes(r)) ? <label className="field"><span>Verification note (required)</span><input value={active===f.id?reason:""} onFocus={()=>{if(active!==f.id){setActive(f.id);setReason("");}}} onChange={e=>{setActive(f.id);setReason(e.target.value);}} placeholder="What you checked against the original"/></label> : null}
+                    <button className="btn btn--small" disabled={busy || !f.value || (f.status==="NEEDS_REVIEW" && f.review_reasons.some(r=>OCR_VERIFICATION_REASONS.includes(r)) && (active!==f.id || !reason.trim()))} onClick={() => review(f, "APPROVE")}>Matches the original</button>
                     <button className="btn btn--quiet btn--small" disabled={busy} onClick={() => { setEditing(f.id); setValue(f.value ?? ""); setReason(""); }}>Correct</button>
                     <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => review(f, "REJECT")}>Reject</button>
                   </div>

@@ -49,7 +49,13 @@ class Settings(BaseSettings):
     asr_provider: str = "sarvam"  # sarvam | openai | none
     tts_provider: str = "sarvam"  # sarvam | none
     doc_provider: str = "sarvam"  # sarvam | openai | local
-    ocr_provider: str = "local"  # local | unlimited (optional, requires a compatible server)
+    ocr_provider: str = "local"  # local | hybrid (optional PaddleOCR/TrOCR) | unlimited
+    ocr_review_threshold: float = 0.85  # routing heuristic, not a calibrated medical probability
+    ocr_max_handwritten_lines: int = 40
+    ocr_tesseract_timeout_seconds: float = 30.0
+    ocr_allow_model_downloads: bool = False
+    ocr_model_cache: str = "./data/ocr-models"
+    handwriting_model: str = "microsoft/trocr-small-handwritten"
     unlimited_ocr_base_url: str = "http://host.docker.internal:8001/v1"
     unlimited_ocr_model: str = "baidu/Unlimited-OCR"
     unlimited_ocr_runtime: str = "vllm"  # vllm | llamacpp (experimental quantized model)
@@ -108,6 +114,10 @@ class Settings(BaseSettings):
         return bool(self.openai_api_key.strip())
 
     def validate_for_startup(self) -> None:
+        if self.ocr_provider not in ("local", "hybrid", "unlimited"):
+            raise RuntimeError("Unknown OCR_PROVIDER.")
+        if not 0 < self.ocr_review_threshold <= 1 or not 1 <= self.ocr_max_handwritten_lines <= 100:
+            raise RuntimeError("Invalid OCR review threshold or handwriting line limit.")
         if self.storage_provider not in ("local", "supabase"):
             raise RuntimeError("Unknown STORAGE_PROVIDER.")
         if self.storage_provider == "supabase":

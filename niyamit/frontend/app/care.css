@@ -18,3 +18,22 @@
 .health-readings { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:12px; }
 .health-reading { border:1px solid var(--rule); border-radius:20px; padding:16px; min-width:0; overflow-wrap:anywhere; }
 .health-reading-value { font-size:26px; font-weight:700; color:var(--ink); }
+.health-summary h2, .health-summary h3, .health-summary p { margin:0; }
+.health-summary > .spread { flex-wrap:wrap; gap:8px; align-items:start; }
+.health-summary .health-readings { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.health-summary .health-reading { padding:14px; gap:10px; }
+.health-summary .health-reading h3 { font-size:16px; }
+.health-summary .health-reading--glucose { grid-column:1 / -1; grid-row:2; background:#f3f8fc; }
+.health-summary .health-reading--hba1c { background:#f6f2fc; }
+.health-summary .health-reading--bp { background:#f0f9f5; }
+.health-summary .health-reading-value { font-size:clamp(21px,5vw,28px); overflow-wrap:normal; }
+.health-measurement + .health-measurement { border-top:1px solid var(--rule); padding-top:12px; }
+.health-verification { font-size:12px; font-weight:600; color:var(--muted); }
+.health-verification--reviewed { color:#216344; }
+.health-summary details { font-size:13px; }
+.health-summary .health-reading--kidney, .health-summary .health-reading--lipids { grid-column:1 / -1; }
+.reading-history { min-width:0; border-top:1px solid var(--rule); padding-top:18px; }
+.reading-history select { width:100%; min-width:0; }
+.reading-history-list { display:grid; gap:10px; list-style:none; padding:0; margin:0; max-height:500px; overflow:auto; }
+.reading-trend { margin:0; min-width:0; }
+.reading-trend svg { display:block; width:100%; height:auto; }

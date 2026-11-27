@@ -33,19 +33,21 @@ async def read_limited(file: UploadFile, limit_mb: int) -> bytes:
 @router.post("/intake-artifacts", status_code=201)
 async def upload(file: UploadFile = File(...), patient_id: str = Form(...),
                  source_type: Literal["PRESCRIPTION", "LAB_REPORT", "REGISTER", "SPREADSHEET", "OTHER"] = Form("PRESCRIPTION"),
+                 document_style: Literal["auto", "printed", "handwritten", "mixed"] = Form("auto"),
+                 document_language: Literal["en", "hi", "te"] = Form("en"),
                  staff: Staff = Depends(require_staff), db: Session = Depends(get_db)) -> dict:
     clinic = get_clinic(db, staff.clinic_id)
     patient = guards.get_patient(db, staff, patient_id)
     data = await read_limited(file, settings.max_upload_mb)
     artifact, proposal = intake.upload(db, clinic, patient, data, file.filename or "upload", SourceType(source_type),
-                                       staff=staff)
+                                       staff=staff, document_style=document_style, document_language=document_language)
     db.commit()  # extraction runs after commit (worker, or inline in eager mode)
     db.refresh(proposal)
     return S.proposal_dict(proposal, artifact, patient)
 
 
 @router.get("/intake-proposals")
-def list_proposals(status: Literal["open", "all", "NEEDS_REVIEW", "EXTRACTION_FAILED", "APPROVED", "REJECTED"] = "open",
+def list_proposals(status: Literal["open", "all", "NEEDS_REVIEW", "EXTRACTION_FAILED", "REVIEWED", "APPROVED", "REJECTED"] = "open",
                    limit: int = Query(100, ge=1, le=300), staff: Staff = Depends(require_staff),
                    db: Session = Depends(get_db)) -> dict:
     stmt = (select(ExtractionProposal, SourceArtifact, Patient)
@@ -95,6 +97,9 @@ def review_field(proposal_id: str, field_id: str, body: FieldReviewIn, staff: St
     field = next((f for f in proposal.fields if str(f.id) == field_id), None)
     if field is None:
         raise HTTPException(404, "Field not found on this proposal.")
+    db.refresh(proposal, with_for_update=True)
+    db.expire(proposal, ["fields"])
+    db.refresh(field)
     intake.review_field(db, staff, proposal, field, action=body.action, value=body.value, reason=body.reason.strip())
     db.commit()
     return _proposal_out(db, staff, proposal)

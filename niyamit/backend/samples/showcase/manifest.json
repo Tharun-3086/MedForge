@@ -1,0 +1,56 @@
+[
+  {
+    "filename": "SHOWCASE-DEMO-v1-2026-09-01.png",
+    "date": "2026-09-01",
+    "values": {
+      "hba1c": "8.1 %",
+      "fasting_glucose": "150 mg/dL",
+      "postmeal_glucose": "210 mg/dL",
+      "blood_pressure": "130/85 mmHg",
+      "creatinine": "1.0 mg/dL",
+      "egfr": "90 mL/min/1.73m\u00b2",
+      "uacr": "15 mg/g",
+      "total_cholesterol": "190 mg/dL",
+      "ldl": "116 mg/dL",
+      "hdl": "45 mg/dL",
+      "triglycerides": "160 mg/dL",
+      "weight": "78 kg"
+    }
+  },
+  {
+    "filename": "SHOWCASE-DEMO-v1-2026-10-01.png",
+    "date": "2026-10-01",
+    "values": {
+      "hba1c": "7.6 %",
+      "fasting_glucose": "140 mg/dL",
+      "postmeal_glucose": "190 mg/dL",
+      "blood_pressure": "128/82 mmHg",
+      "creatinine": "1.1 mg/dL",
+      "egfr": "87 mL/min/1.73m\u00b2",
+      "uacr": "14 mg/g",
+      "total_cholesterol": "180 mg/dL",
+      "ldl": "108 mg/dL",
+      "hdl": "47 mg/dL",
+      "triglycerides": "150 mg/dL",
+      "weight": "77 kg"
+    }
+  },
+  {
+    "filename": "SHOWCASE-DEMO-v1-2026-11-01.png",
+    "date": "2026-11-01",
+    "values": {
+      "hba1c": "7.2 %",
+      "fasting_glucose": "130 mg/dL",
+      "postmeal_glucose": "180 mg/dL",
+      "blood_pressure": "126/80 mmHg",
+      "creatinine": "1.2 mg/dL",
+      "egfr": "84 mL/min/1.73m\u00b2",
+      "uacr": "12 mg/g",
+      "total_cholesterol": "175 mg/dL",
+      "ldl": "100 mg/dL",
+      "hdl": "48 mg/dL",
+      "triglycerides": "140 mg/dL",
+      "weight": "76 kg"
+    }
+  }
+]

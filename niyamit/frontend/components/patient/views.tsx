@@ -6,6 +6,7 @@ import { api, ApiError, useApi, usePoll } from "@/lib/api";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { BARRIER_KEYS, t, tBarrier, tItemKind, tItemStatus, tMessageStatus, tRequestStatus, type Lang } from "@/lib/i18n";
 import type { AppointmentRequest, Plan } from "@/lib/types";
+import { DocumentOcrOptions } from "@/components/document-ocr-options";
 
 export function BarrierPicker({ lang, busy, onPick }: { lang: Lang; busy: boolean; onPick: (key: string) => void }) {
   return (
@@ -25,6 +26,8 @@ export function ReportUpload({ lang, onDone, onViewAnalysis }: { lang: Lang; onD
   const [state, setState] = useState<"idle" | "sending" | "done">("idle");
   const [problem, setProblem] = useState<string | null>(null);
   const [sourceType, setSourceType] = useState("LAB_REPORT");
+  const [documentStyle, setDocumentStyle] = useState("auto");
+  const [documentLanguage, setDocumentLanguage] = useState("en");
 
   async function send(file: File) {
     setState("sending");
@@ -32,6 +35,8 @@ export function ReportUpload({ lang, onDone, onViewAnalysis }: { lang: Lang; onD
     const form = new FormData();
     form.set("file", file);
     form.set("source_type", sourceType);
+    form.set("document_style", documentStyle);
+    form.set("document_language", documentLanguage);
     try {
       await api("/v1/p/documents", { form });
       setState("done");
@@ -49,6 +54,7 @@ export function ReportUpload({ lang, onDone, onViewAnalysis }: { lang: Lang; onD
       <label className="field"><span>{t(lang, "documentKind")}</span><select value={sourceType} disabled={state === "sending"} onChange={(e) => setSourceType(e.target.value)}>
         <option value="LAB_REPORT">{t(lang, "labReport")}</option><option value="PRESCRIPTION">{t(lang, "prescription")}</option><option value="OTHER">{t(lang, "otherDocument")}</option>
       </select></label>
+      <DocumentOcrOptions style={documentStyle} language={documentLanguage} onStyle={setDocumentStyle} onLanguage={setDocumentLanguage} disabled={state==="sending"} lang={lang}/>
       {state === "done" ? <p role="status" className="notice notice--ok">{t(lang, "reportReceived")}</p> : null}
       {state === "done" && onViewAnalysis ? <button type="button" className="btn" onClick={onViewAnalysis}>{t(lang, "viewAnalysis")}</button> : null}
       <div className="scan-options">
@@ -66,6 +72,7 @@ export function ReportUpload({ lang, onDone, onViewAnalysis }: { lang: Lang; onD
 }
 
 type Passport = {
+  timeline?: {id:string;type:string;summary:string;at:string}[];
   patient: { name: string; language: string; opted_out: boolean };
   clinic: { name: string; phone: string };
   plan: Plan | null;
@@ -80,13 +87,16 @@ type Passport = {
 
 export function PassportView({ lang, onStop, onStart, busy }: { lang: Lang; onStop: () => void; onStart: () => void; busy: boolean }) {
   const { data, error, reload } = useApi<Passport>("/v1/p/passport");
-  usePoll(Boolean(data?.documents.some((d) => d.status === "EXTRACTION_PENDING")), reload, 3000);
+  usePoll(true, reload, 15000);
   const [confirmStop, setConfirmStop] = useState(false);
   if (error) return <p className="notice notice--fail">{error.message}</p>;
   if (!data) return <p className="muted">{t(lang, "loading")}</p>;
   const plan = data.plan;
+  const remindersEnabled=!data.patient.opted_out && data.consents.REMINDERS==='GRANTED';
+  const careHistory=(data.timeline??[]).filter(e=>["PLAN_APPROVED","FOLLOW_UP_COMPLETED","APPOINTMENT_BOOKED"].includes(e.type));
   return (
     <div className="stack" style={{ gap: 16 }}>
+      {careHistory.length?<section className="card"><h2>{lang==='en'?'Clinic-recorded care history':lang==='hi'?'क्लिनिक में दर्ज देखभाल का इतिहास':'క్లినిక్ నమోదు చేసిన సంరక్షణ చరిత్ర'}</h2><ul className="stack" style={{paddingLeft:20}}>{careHistory.map(e=><li key={e.id}><p>{e.summary}</p><span className="small muted">{fmtDateTime(e.at,lang)}</span></li>)}</ul></section>:null}
       <section className="card">
         <h2>{t(lang, "planTitle")}</h2>
         {plan ? (
@@ -149,8 +159,8 @@ export function PassportView({ lang, onStop, onStart, busy }: { lang: Lang; onSt
 
       <section className="card">
         <h2>{t(lang, "reminders")}</h2>
-        <p>{data.patient.opted_out ? t(lang, "remindersOff") : t(lang, "remindersOn")}</p>
-        {data.patient.opted_out ? (
+        <p>{remindersEnabled?t(lang,"remindersOn"):lang==='en'?'Reminder messages are off.':lang==='hi'?'रिमाइंडर संदेश बंद हैं।':'రిమైండర్ సందేశాలు నిలిపివేయబడ్డాయి.'}</p>
+        {!remindersEnabled ? (
           <button className="btn" disabled={busy} onClick={onStart}>{t(lang, "startReminders")}</button>
         ) : confirmStop ? (
           <div className="stack">

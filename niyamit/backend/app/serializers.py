@@ -113,7 +113,8 @@ def reply_dict(r: PatientReply) -> dict[str, Any]:
 
 def artifact_dict(a: SourceArtifact) -> dict[str, Any]:
     return {"id": str(a.id), "filename": a.filename, "mime_type": a.mime_type, "size_bytes": a.size_bytes,
-            "page_count": a.page_count, "source_type": a.source_type, "uploaded_by_patient": a.uploaded_by_patient,
+            "page_count": a.page_count, "document_style": a.document_style, "document_language": a.document_language,
+            "source_type": a.source_type, "uploaded_by_patient": a.uploaded_by_patient,
             "is_synthetic": a.is_synthetic, "created_at": iso(a.created_at),
             "content_url": f"/v1/artifacts/{a.id}/content?{sign(str(a.id))}",
             "page_url": f"/v1/artifacts/{a.id}/page/{{page}}?{sign(str(a.id))}"}

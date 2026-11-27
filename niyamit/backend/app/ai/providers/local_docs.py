@@ -17,21 +17,36 @@ def tesseract_available() -> bool:
     return shutil.which("tesseract") is not None
 
 
-def read_blocks(data: bytes, mime: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
+def read_blocks(data: bytes, mime: str, *, image_reader=None, scan_all_pages: bool = False) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
     """Returns (blocks, page_sizes, method)."""
     if mime == "application/pdf":
         blocks, pages = _pdf_text_blocks(data)
-        if sum(len(b["text"]) for b in blocks) >= 40:
-            return blocks, pages, "pdf-text-layer"
-        images = render_pdf_pages(data)
+        from app.config import settings
+        if len(pages) > settings.max_pdf_pages:
+            raise ProviderError("local", "PAGE_LIMIT")
         all_blocks: list[dict[str, Any]] = []
-        for idx, png in enumerate(images, start=1):
-            b, _ = _ocr_image(png, page=idx)
-            all_blocks += b
-        return all_blocks, pages, "tesseract"
+        scanned = False
+        for idx in range(1, len(pages) + 1):
+            text = [dict(b, engine="pdf-text-layer") for b in blocks if b["page"] == idx]
+            if not scan_all_pages and sum(len(b["text"]) for b in text) >= 40:
+                all_blocks += text
+                continue
+            png = render_pdf_page(data, idx)
+            try:
+                b, _ = (image_reader or _ocr_image)(png, page=idx)
+            except ProviderError:
+                if not text:
+                    raise
+                b = [dict(x, review_reasons=["OCR_INCOMPLETE"]) for x in text]
+                text = []
+            scanned = True
+            all_blocks += merge_blocks(text, b)
+        for i, block in enumerate(all_blocks):
+            block["id"] = f"p{block['page']}-l{i+1}"
+        return all_blocks, pages, "hybrid" if image_reader else "pdf-text+tesseract" if scanned and blocks else "tesseract" if scanned else "pdf-text-layer"
     if mime.startswith("image/"):
-        blocks, pages = _ocr_image(data, page=1)
-        return blocks, pages, "tesseract"
+        blocks, pages = (image_reader or _ocr_image)(data, page=1)
+        return blocks, pages, "hybrid" if image_reader else "tesseract"
     if mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
         return _xlsx_blocks(data), [{"page": 1, "width": 0, "height": 0}], "spreadsheet"
     if mime == "text/csv":
@@ -77,10 +92,14 @@ def _ocr_image(data: bytes, page: int) -> tuple[list[dict[str, Any]], list[dict[
             scale = 1400 / max(w, h)
             im = im.resize((int(w * scale), int(h * scale)))
         sw, sh = im.size
-        d = pytesseract.image_to_data(im, output_type=pytesseract.Output.DICT, config="--psm 4")
+        from app.config import settings
+        try:
+            d = pytesseract.image_to_data(im, output_type=pytesseract.Output.DICT, config="--psm 4", timeout=settings.ocr_tesseract_timeout_seconds)
+        except (RuntimeError, pytesseract.TesseractError) as exc:
+            raise ProviderError("tesseract", "OCR_FAILED") from exc
     lines: dict[tuple[int, int, int], list[int]] = {}
     for i, word in enumerate(d["text"]):
-        if word.strip() and float(d["conf"][i]) > 20:
+        if word.strip() and float(d["conf"][i]) >= 0:
             lines.setdefault((d["block_num"][i], d["par_num"][i], d["line_num"][i]), []).append(i)
     blocks: list[dict[str, Any]] = []
     ordered = sorted(lines.values(), key=lambda idx: (min(d["top"][i] for i in idx), min(d["left"][i] for i in idx)))
@@ -90,10 +109,55 @@ def _ocr_image(data: bytes, page: int) -> tuple[list[dict[str, Any]], list[dict[
         y0 = min(d["top"][i] for i in idx) / sh
         x1 = max(d["left"][i] + d["width"][i] for i in idx) / sw
         y1 = max(d["top"][i] + d["height"][i] for i in idx) / sh
-        conf = sum(float(d["conf"][i]) for i in idx) / len(idx) / 100
+        # A weak digit must not disappear behind a high average line score.
+        conf = min(float(d["conf"][i]) for i in idx) / 100
         blocks.append({"id": f"p{page}-l{lno}", "page": page, "text": text,
-                       "bbox": [round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)], "ocr_conf": round(conf, 2)})
+                       "bbox": [round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)], "ocr_conf": round(conf, 2), "engine": "tesseract"})
     return blocks, [{"page": page, "width": w, "height": h}]
+
+
+def merge_blocks(text_blocks: list[dict], ocr_blocks: list[dict]) -> list[dict]:
+    """Keep native PDF text and non-overlapping scan regions. Surface disagreements."""
+    import re
+    result = list(text_blocks)
+    squash = lambda s: re.sub(r"\s+", "", s).casefold()
+    for block in ocr_blocks:
+        box = block.get("bbox")
+        match = None
+        for native in text_blocks:
+            other = native.get("bbox")
+            if not box or not other:
+                continue
+            intersection = max(0, min(box[2], other[2])-max(box[0], other[0])) * max(0, min(box[3], other[3])-max(box[1], other[1]))
+            area = min((box[2]-box[0])*(box[3]-box[1]), (other[2]-other[0])*(other[3]-other[1]))
+            if area > 0 and intersection / area >= 0.7:
+                match = native
+                break
+        if match and squash(block["text"]) == squash(match["text"]):
+            continue
+        if match:
+            for item in (match, block):
+                item["review_reasons"] = sorted(set(item.get("review_reasons", [])) | {"OCR_DISAGREEMENT"})
+        result.append(block)
+    return sorted(result, key=lambda b: (b.get("page", 1), (b.get("bbox") or [0, 0])[1], (b.get("bbox") or [0])[0]))
+
+
+def render_pdf_page(data: bytes, page: int, scale: float = 2.0) -> bytes:
+    import pypdfium2 as pdfium
+    from app.config import settings
+    with pdfium.PdfDocument(data) as pdf:
+        source = pdf[page-1]
+        w, h = source.get_size()
+        scale = min(scale, (settings.max_image_pixels / max(1, w*h)) ** 0.5)
+        bitmap = source.render(scale=scale)
+        try:
+            image = bitmap.to_pil()
+            buf = io.BytesIO()
+            image.save(buf, format="PNG")
+            return buf.getvalue()
+        finally:
+            bitmap.close()
+            source.close()
 
 
 def _xlsx_blocks(data: bytes) -> list[dict[str, Any]]:

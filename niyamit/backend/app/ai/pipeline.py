@@ -34,7 +34,7 @@ from app.enums import Intent
 
 log = logging.getLogger("niyamit.ai")
 
-PIPELINE_VERSION = "reply-v1/intake-v1"
+PIPELINE_VERSION = "reply-v1/intake-v2"
 
 
 # ------------------------------------------------------------------ provider selection
@@ -214,7 +214,8 @@ class DocResult:
 
 
 def extract_document(data: bytes, mime: str, filename: str, *, today: date,
-                     faults: set[str] | None = None, local_only: bool = False) -> DocResult:
+                     faults: set[str] | None = None, local_only: bool = False,
+                     document_style: str = "auto", document_language: str = "en") -> DocResult:
     from app.ai.providers.local_docs import read_blocks
 
     faults = faults or set()
@@ -222,6 +223,13 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
     blocks: list[dict[str, Any]] = []
     pages: list[dict[str, Any]] = []
     ocr = "none"
+    if settings.ocr_provider == "hybrid":
+        try:
+            from app.ai.providers.hybrid_ocr import read_blocks as hybrid_read
+            blocks, pages, ocr = hybrid_read(data, mime, style=document_style, language=document_language)
+            notes.append("Local hybrid OCR: machine readings and handwriting alternatives require source verification. Scores are not medical certainty.")
+        except ProviderError as exc:
+            notes.append(f"Hybrid OCR unavailable ({exc.code}); using local document reading.")
     if settings.ocr_provider == "unlimited" and not local_only and "DOC_PROVIDER_DOWN" not in faults:
         try:
             from app.ai.providers.unlimited_ocr import read_blocks as read_unlimited
@@ -236,6 +244,19 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
             blocks, pages, ocr = read_blocks(data, mime)
     except ProviderError as exc:
         notes.append(f"Local text reading unavailable ({exc.provider}: {exc.code}).")
+    if document_style in ("handwritten", "mixed"):
+        for block in blocks:
+            block["review_reasons"] = sorted(set(block.get("review_reasons", [])) | {"HANDWRITING_REQUIRES_REVIEW"})
+        notes.append("Handwritten content is unverified. Never use uncertain medicine names, doses or insulin units as treatment instructions.")
+    # Keep alternate transcriptions as separate evidence, never replace one with a guess.
+    alternatives = []
+    for block in blocks:
+        for index, alternative in enumerate(block.get("alternatives", []), 1):
+            if alternative.get("text") and alternative["text"] != block["text"]:
+                alternatives.append({**block, **alternative, "id": f"{block['id']}-alt{index}",
+                                     "alternatives": [], "ocr_conf": None,
+                                     "review_reasons": sorted(set(block.get("review_reasons", [])) | {"HANDWRITING_REQUIRES_REVIEW", "OCR_DISAGREEMENT"})})
+    blocks.extend(alternatives)
     if blocks and INSTRUCTION_LIKE.search(" ".join(b["text"] for b in blocks)):
         notes.append("Document contains instruction-like text. It was treated as data only; nothing was executed.")
 
@@ -285,10 +306,20 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
         candidates = rules.extract_document(blocks)
         extractor, model_version = "rules", "rules-v1"
     fields = validate_fields(candidates, blocks, today)
-    from app.services.health_readings import extract as extract_readings
-    for name,(value,quote,block_id) in extract_readings(blocks).items():
-        fields.append(FieldProposal(name,value,quote,"UNVERIFIED",None,
-            {"quote":quote,"block_ids":[block_id] if block_id else []},["VERIFY_MEASUREMENT_AGAINST_ORIGINAL"]))
+    from app.services.health_readings import candidates as reading_candidates
+    from app.ai.providers.ocr_review import evidence_for
+    readings = reading_candidates(blocks)
+    for name, rows in readings.items():
+        conflict = len({r[0] for r in rows}) > 1
+        for value, quote, block_id in dict.fromkeys(rows):
+            evidence, reasons, confidence = evidence_for(blocks, [block_id] if block_id else [])
+            reasons.append("VERIFY_MEASUREMENT_AGAINST_ORIGINAL")
+            if conflict:
+                reasons.append("CONFLICTING_MEASUREMENTS")
+            evidence["quote"] = quote
+            from app.ai.providers.ocr_review import VERIFICATION_REASONS
+            fields.append(FieldProposal(name, value, quote, "NEEDS_REVIEW" if VERIFICATION_REASONS.intersection(reasons) else "UNVERIFIED",
+                                        confidence, evidence, sorted(set(reasons))))
     return DocResult(blocks, pages, fields, ocr, extractor, model_version, notes)
 
 
@@ -369,8 +400,13 @@ def validate_fields(cands: list[FieldCandidate], blocks: list[dict[str, Any]], t
                 value = "OTHER"
         if c.confidence is not None and c.confidence < 0.5:
             reasons.append("LOW_CONFIDENCE")
+        from app.ai.providers.ocr_review import evidence_for
+        ocr_evidence, ocr_reasons, ocr_confidence = evidence_for(blocks, ids)
+        evidence.update(ocr_evidence)
+        reasons.extend(ocr_reasons)
+        confidence = min(c.confidence, ocr_confidence) if c.confidence is not None and ocr_confidence is not None else c.confidence if c.confidence is not None else ocr_confidence
         proposals.append(FieldProposal(c.name, value, c.value, "NEEDS_REVIEW" if reasons else "UNVERIFIED",
-                                       c.confidence, evidence, reasons))
+                                       confidence, evidence, sorted(set(reasons))))
 
     # 'before next visit' style values resolve to the next review date when there is exactly one
     reviews = {p.value for p in proposals if p.name == "next_review_date" and p.value}
