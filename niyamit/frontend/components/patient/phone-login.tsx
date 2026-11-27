@@ -94,7 +94,12 @@ export function PhoneLogin() {
       setChallenge(next); setCode(""); setProfiles([]); setRetryAt(nextRetry);
       setCheckRetryAt(0); setExpiresAt(nextExpiry); setNow(current);
       remember({phone,challenge:next,expiresAt:nextExpiry,retryAt:nextRetry,checkRetryAt:0});
-    } catch (e) { showError(e); }
+    } catch (e) {
+      if(e instanceof ApiError && e.status===404){
+        remember(null);setChallenge(null);setCode("");setProfiles([]);setExpiresAt(0);setRetryAt(0);setCheckRetryAt(0);
+      }
+      showError(e);
+    }
     finally { inFlight.current = false; setBusy(false); }
   }
 

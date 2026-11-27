@@ -1,4 +1,33 @@
-# Latest local update: extended report history (26 November 2026)
+# Latest local update: table OCR fix (27 November 2026)
+
+Automatic now selects the eligible printed-PDF fast path without a manual
+Printed selection. All 215 backend tests passed, including OCR-routing guards.
+Actual default-style patient/clinic lab PDF uploads extracted in 0.489/0.166
+seconds on an isolated synthetic QA patient. Reviewed values matched across
+both APIs. Local backend/worker rebuilt; no Git push or hosted deployment.
+
+Printed PDF latency fixed locally: pure text PDFs explicitly marked Printed can
+skip heavy OCR, and supported source-linked rules skip unnecessary external AI.
+208 backend tests passed. Existing pending glucose PDF recovered without a new
+upload or automatic approval; patient shows 142/190 mg/dL awaiting clinic review.
+Actual fixture extraction-only timings: PDF 0.038s, cold-model PNG 23.787s.
+
+Same-day clock ordering added: report date, clinic-approved collection/report
+time, then upload time. The clock is a separately reviewable field and appears
+on shared patient/clinic reading cards and history. 205 backend tests, two trend
+tests and frontend production build passed. Local services updated. Intraday
+charts and mixed-zone clock conversion are not included. No Git push or deploy.
+
+Fixed baseline grouping of printed table cells before left-to-right ordering.
+202 backend tests passed. Live local PDF and PNG acceptance extracted all ten
+lab measurements in each format; patient and clinic showed identical reviewed
+health records. Synthetic cursive follow-up date extraction and verification-note
+gating passed. The new 11 December item is confirmed but not completed. Actual
+historical handwriting remained unverified, without an invented follow-up;
+real handwriting accuracy is not established. See niyamit/TABLE_OCR_CHECK.md.
+No assistant Git commit/push, Render deploy or APK rebuild in this pass.
+
+## Previous local update: extended report history (26 November 2026)
 
 Final patient journey acceptance: 199 backend tests, two trend tests and final
 frontend build/type check passed. Fresh actual uploads exercised printed,
@@ -155,3 +184,12 @@ git push -u origin kiran/backend-infrastructure
 ```
 
 Remote verified: `https://github.com/Tharun-3086/MedForge.git`. The local branch is `kiran/backend-infrastructure`; it did not already exist on the remote when checked. Do not force-push. Secrets and local build/model artifacts are ignored.
+
+
+## Diabetes intelligence audit and first increment — 27 November 2026
+
+- Audit and architecture/requirements/schema/security/operations/validation documents added at repository root; see PROJECT_AUDIT.md and TEST_REPORT.md.
+- Structured medical measurement proposals now flow from Sarvam/OpenAI schema through source/unit/date validation and rule reconciliation; unknown parameters are retained for non-approvable manual review. Explicit local document processing cannot select an external LLM.
+- Shared English monitoring summary with source links, comparable reviewed-history changes and audited JSON export; patient-scoped duplicate-upload reuse; original/review preservation.
+- 242 PostgreSQL tests passed; frontend production build/type checks and 2 trend tests passed. Live synthetic patient upload → hybrid OCR + Sarvam → source-checked test review → matching patient/clinic readings and export passed; duplicate reused. No real patient records sent externally in these checks.
+- Local services rebuilt/restarted. No GitHub push, Render deployment or APK update. Clinical validation and production gates remain open, as do medication/CGM/screening/target/full portability workflows.

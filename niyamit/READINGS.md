@@ -61,3 +61,19 @@ or APK rebuild was performed for this update.
 
 References: [NIDDK kidney markers](https://www.niddk.nih.gov/health-information/professionals/advanced-search/quick-reference-uacr-gfr),
 [Sarvam authentication](https://docs.sarvam.ai/api-reference/authentication).
+# Collection/report clocks, 27 November 2026
+
+Multiple reports per day are supported. For each measurement, latest selection
+orders by report date, then clinic-approved sample collection/report time, then
+upload time and stable source ID. Explicit collection clocks take precedence over
+report issue clocks; received, approved and upload clocks are not extracted as
+measurement clocks. Times are reviewed as a separate `document_time` field and
+shown beside the date on both patient and clinic cards/history. Unknown or
+conflicting/unreviewed clocks do not supply a report-time ordering value.
+Existing dated reports without clocks retain the upload-time fallback. All
+eligible historical records remain available. No database migration is needed.
+
+This changes the latest cards and history ordering. Trend plots still use their
+existing conservative daily conflict policy; intraday plotting is not part of
+this change. Mixed time zones are not converted by this clock-only field; the
+manual fixtures explicitly use the clinic's Asia/Kolkata time zone.

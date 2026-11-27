@@ -94,10 +94,12 @@ from app.services.health_readings import LABELS as HEALTH_LABELS
 
 FIELD_LABELS = {
     **HEALTH_LABELS,
+    "unmapped_measurement":"Unsupported measurement — manual review",
     "blood_pressure":"Blood pressure", "fasting_glucose":"Fasting glucose", "postmeal_glucose":"Post-meal glucose",
     "random_glucose":"Random glucose", "blood_glucose":"Glucose (type unspecified)", "hba1c":"HbA1c",
     "document_type": "Document type",
     "document_date": "Document date",
+    "document_time": "Sample collection / report time",
     "next_review_date": "Next review visit",
     "hba1c_due_date": "HbA1c test due",
     "eye_exam_due_date": "Eye check due",
@@ -111,7 +113,7 @@ class FieldCandidate(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: Literal[
-        "document_type", "document_date", "next_review_date", "hba1c_due_date", "eye_exam_due_date",
+        "document_type", "document_date", "document_time", "next_review_date", "hba1c_due_date", "eye_exam_due_date",
         "foot_exam_due_date", "kidney_test_due_date", "refill_due_date",
     ]
     value: str = Field(min_length=1, max_length=200)
@@ -120,9 +122,13 @@ class FieldCandidate(BaseModel):
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
+from app.ai.medical_contracts import MedicalMeasurement, MEASUREMENT_JSON_SCHEMA
+
+
 class DocExtraction(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    fields: list[FieldCandidate] = []
+    fields: list[FieldCandidate] = Field(default_factory=list, max_length=200)
+    measurements: list[MedicalMeasurement] = Field(default_factory=list, max_length=200)
 
 
 DOC_JSON_SCHEMA: dict[str, Any] = {
@@ -145,8 +151,9 @@ DOC_JSON_SCHEMA: dict[str, Any] = {
             },
         }
     },
-    "required": ["fields"],
+    "required": ["fields", "measurements"],
 }
+DOC_JSON_SCHEMA["properties"]["measurements"] = {"type":"array", "items":MEASUREMENT_JSON_SCHEMA}
 
 
 def sarvam_extract_schema() -> dict[str, Any]:
@@ -158,4 +165,9 @@ def sarvam_extract_schema() -> dict[str, Any]:
             "type": "string",
             "description": f"The exact sentence or line in the document that states the {name.replace('_', ' ')}.",
         }
+    import copy
+    measurement_schema = copy.deepcopy(MEASUREMENT_JSON_SCHEMA)
+    measurement_schema["properties"]["confidence"]["type"] = "number"
+    props["measurements"] = {"type":"array", "items": measurement_schema,
+        "description":"Extract diabetes-related measured results, not reference limits, due dates or medicine doses. Keep exact source evidence. Empty array if absent."}
     return {"type": "object", "properties": props}

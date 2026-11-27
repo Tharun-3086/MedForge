@@ -130,6 +130,9 @@ export default function ReviewPage() {
               ) : f.extracted_value ? (
                 <span className="source-quote">Written as: “{f.extracted_value}”{f.evidence.page ? `, page ${f.evidence.page}` : ""}</span>
               ) : null}
+              {f.evidence.extraction_provider ? <span className="small muted">Structured extraction: {f.evidence.extraction_provider} · {f.evidence.extraction_schema}</span> : null}
+              {f.evidence.reference_range ? <span className="small">Copied laboratory range: {f.evidence.reference_range} · Not separately verified; not a personalized target.</span> : null}
+              {f.evidence.test_date ? <span className="small">Source-copied test date: {f.evidence.test_date} · Compare with the original.</span> : null}
               {f.evidence.computed ? <span className="small muted">{f.evidence.computed}</span> : null}
               {f.status === "APPROVED" && f.proposed_value !== f.value ? <span className="small">Corrected from {f.proposed_value ? showValue(f, f.proposed_value) : "no value"}</span> : null}
               {f.review_reasons.map((r) => <span key={r} className="small" style={{ color: "var(--amber)" }}>{REVIEW_REASONS[r] ?? r}</span>)}

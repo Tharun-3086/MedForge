@@ -44,6 +44,10 @@ def digest(value):
 def request_code(db, phone, *, before_send=None):
     guard()
     phone = phone_number(phone)
+    # Avoid sending/costing an SMS for a phone with no clinic registration.
+    # Keep the verification-time lookup too: a record can be removed meanwhile.
+    if db.scalar(select(Patient.id).where(Patient.phone_e164==phone).limit(1)) is None:
+        raise HTTPException(404, 'No clinic record is linked to this number. Ask the clinic admin to register your number first. No SMS was sent.')
     now = utcnow(); key = digest(phone); challenge = uuid.uuid4()
     code = f'{secrets.randbelow(1000000):06d}'
     values = dict(phone_hash=key, id=challenge, code_hash=digest(f'{challenge}:{code}'),

@@ -4,7 +4,7 @@ import httpx
 from fastapi import HTTPException
 from app.config import settings
 from app.services import twilio_verify
-from tests.conftest import new_patient
+from tests.conftest import new_patient, register_otp_test_phone
 
 @pytest.fixture
 def sms(monkeypatch):
@@ -27,6 +27,7 @@ def test_sms_login_no_code_exposure_and_single_use(nurse,sms,monkeypatch):
     assert nurse.post('/v1/p/otp/verify',json=data).status_code==401
 
 def test_sms_failure_never_falls_back_to_dev(nurse,sms,monkeypatch):
+    register_otp_test_phone("+919000480002")
     def fail(phone):raise HTTPException(503,'SMS unavailable')
     monkeypatch.setattr(twilio_verify,'send',fail)
     r=nurse.post('/v1/p/otp/request',json={'phone':'+919000480002'})
@@ -59,3 +60,30 @@ def test_sms_real_record_access_requires_provider_approval(nurse,sms,monkeypatch
     c=nurse.post('/v1/p/otp/request',json={'phone':phone}).json()
     r=nurse.post('/v1/p/otp/verify',json={'phone':phone,'challenge_id':c['challenge_id'],'code':'123456'})
     assert r.status_code==200 and r.json()['authenticated']
+
+
+def test_unknown_phone_rejected_before_sms_or_challenge(nurse,sms,monkeypatch):
+    from app.db import SessionLocal
+    from app.models import PatientOtpChallenge
+    from app.services.patient_otp import digest
+    from sqlalchemy import select
+    phone='+919000480090'
+    monkeypatch.setattr(twilio_verify,'send',lambda *a:pytest.fail('SMS sent to unregistered phone'))
+    r=nurse.post('/v1/p/otp/request',json={'phone':phone})
+    assert r.status_code==404 and 'No SMS was sent' in r.json()['detail']
+    with SessionLocal() as db:
+        assert db.scalar(select(PatientOtpChallenge).where(PatientOtpChallenge.phone_hash==digest(phone))) is None
+
+
+def test_removed_phone_gets_no_sms_until_reregistered(nurse,sms,monkeypatch):
+    from tests.conftest import login
+    phone='+919000480091';pid=new_patient(nurse,'Disposable OTP QA',phone,plan_days=None)
+    login(nurse,'doctor@sunrise.demo')
+    assert nurse.request('DELETE','/v1/patients/'+pid,json={'confirm_name':'Disposable OTP QA'}).status_code==200
+    calls=[]
+    monkeypatch.setattr(twilio_verify,'send',lambda p:(calls.append(p) or 'VE'+'5'*32))
+    assert nurse.post('/v1/p/otp/request',json={'phone':phone}).status_code==404
+    assert calls==[]
+    new_patient(nurse,'Readded OTP QA',phone,plan_days=None)
+    assert nurse.post('/v1/p/otp/request',json={'phone':phone}).status_code==200
+    assert calls==[phone]

@@ -155,6 +155,7 @@ def demo_login(request: Request, response: Response, db: Session = Depends(get_d
 
 @router.post("/otp/request")
 def otp_request(body: OtpRequestIn, request: Request, db: Session = Depends(get_db)):
+    rate_limit(f"otp-registration-ip:{client_ip(request)}", 600, 3600)
     # The narrow phone quota and cooldown are persistent and count successful sends only.
     # A generous shared-network backstop avoids treating a clinic/proxy as one patient.
     return patient_otp.request_code(db, body.phone,

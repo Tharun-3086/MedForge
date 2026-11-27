@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { HealthReadings } from "@/components/patient/health-readings";
-import { useParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useState } from "react";
 
 import { CATEGORY_LABELS, reminderOutcome, templateName } from "@/components/outcomes";
@@ -16,7 +16,7 @@ import { useStaff } from "@/lib/staff-context";
 import type { Appointment, Message, PatientBrief, Plan, Reply, Task, TimelineEvent } from "@/lib/types";
 
 type Detail = {
-  patient: PatientBrief; consents: Record<string, string>; plans: Plan[]; replies: Reply[]; messages: Message[];
+  can_remove_test_patient?:boolean; patient: PatientBrief; consents: Record<string, string>; plans: Plan[]; replies: Reply[]; messages: Message[];
   tasks: Task[]; appointments: Appointment[]; today: string;
 };
 
@@ -30,6 +30,9 @@ const CONSENT_LABEL: Record<string, string> = {
 };
 
 export default function PatientPage() {
+  const router=useRouter();
+  const [removeOpen,setRemoveOpen]=useState(false);
+  const [removeName,setRemoveName]=useState("");
   const { id } = useParams<{ id: string }>();
   const { can, refreshCounts, me } = useStaff();
   const toast = useToast();
@@ -71,6 +74,14 @@ export default function PatientPage() {
 
   return (
     <>
+      <Modal open={removeOpen} title="Remove test patient" onClose={()=>{if(!busy)setRemoveOpen(false);}}>
+        <div className="stack"><p>Remove {patient.name} and their test reports, readings, follow-up plans, tasks and access links. You can then add the same phone number again with an empty history. This cannot be undone. Audit records are retained.</p>
+        <label className="field"><span>Type the patient's name to confirm: {patient.name}</span><input value={removeName} onChange={e=>setRemoveName(e.target.value)} /></label>
+        <button className="btn btn--danger" disabled={busy||removeName!==patient.name} onClick={async()=>{
+          const result=await run(()=>api<{ok:boolean;file_cleanup_pending:number}>(`/v1/patients/${id}`,{method:"DELETE",body:{confirm_name:removeName}}),"Test patient removed. You can reuse the phone number.");
+          if(result){if(result.file_cleanup_pending)toast("Patient removed; some original files are queued for cleanup.");refreshCounts();router.replace('/patients');}
+        }}>Permanently remove test patient</button></div>
+      </Modal>
       <PageHead
         title={patient.name}
         lede={<span className="row" style={{ gap: 14 }}>
@@ -82,6 +93,7 @@ export default function PatientPage() {
           {patient.opted_out ? <Pill tone="fail">Opted out of reminders</Pill> : null}
         </span>}
         actions={<>
+          {data.can_remove_test_patient?<button className="btn btn--danger" onClick={()=>{setRemoveName("");setRemoveOpen(true);}}>Remove test patient</button>:null}
           <Link className="btn btn--quiet" href={`/patients/${id}/capsule`}>Visit capsule</Link>
           {!patient.opted_out ? <button className="btn btn--quiet" onClick={remind}>Send reminder</button> : null}
           <button className="btn btn--quiet" disabled={busy} onClick={async () => {

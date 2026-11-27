@@ -185,8 +185,26 @@ def create_patient(body: PatientIn, staff: Staff = Depends(require_staff), db: S
 def get_patient(patient_id: str, staff: Staff = Depends(require_staff), db: Session = Depends(get_db)) -> dict:
     p = guards.get_patient(db, staff, patient_id)
     out = views.patient_detail(db, staff, clinic_of(db, staff), p)
+    from app.services.test_patients import allowed
+    out["can_remove_test_patient"] = allowed(clinic_of(db,staff),p,staff)
     db.commit()  # view audit row
     return out
+
+
+class RemoveTestPatientIn(BaseModel):
+    confirm_name: str = Field(min_length=1,max_length=120)
+
+
+@router.delete("/patients/{patient_id}")
+def remove_test_patient(patient_id:uuid.UUID,body:RemoveTestPatientIn,
+                        staff:Staff=Depends(require_roles(Role.ADMIN,Role.DOCTOR)),db:Session=Depends(get_db)):
+    from app.services.test_patients import allowed,remove
+    patient=db.scalar(select(Patient).where(Patient.id==patient_id,Patient.clinic_id==staff.clinic_id))
+    if patient is None:raise HTTPException(404,"Patient not found.")
+    clinic=clinic_of(db,staff)
+    if not allowed(clinic,patient,staff):raise HTTPException(403,"Removal is available only for synthetic test patients in demo mode. The fixed showcase patient is protected.")
+    if body.confirm_name.strip()!=patient.display_name:raise HTTPException(422,"Type the patient's exact name to confirm removal.")
+    return remove(db,clinic,patient,staff)
 
 
 @router.patch("/patients/{patient_id}")
