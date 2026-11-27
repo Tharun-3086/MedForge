@@ -49,3 +49,12 @@ Open http://localhost:3000/ and choose Patient or Clinic. Linux/macOS users use 
 - [Security](SECURITY.md)
 
 Source lives in niyamit/. Pushing to GitHub does not host the app. A laptop tunnel depends on power and connectivity; server hosting runs independently. Never commit credentials, uploads, model weights or database dumps.
+
+
+## Diabetes intelligence increment (local, not a production release)
+
+The source audit is in [PROJECT_AUDIT.md](PROJECT_AUDIT.md). Structured medical candidates now reach Sarvam/OpenAI contracts and pass through evidence/unit/date validation and clinical review; regex remains a fallback. A source-linked English monitoring summary, numerical comparisons, JSON summary export and patient-scoped duplicate handling extend the existing application.
+
+This is **not clinically validated or ready for real-patient production**. Medication/insulin history, CGM/glucometer ingestion, screening findings, personalized targets, full export/deletion and representative handwriting validation remain unfinished. No live deployment or APK publication was performed for this increment.
+
+Engineering references: [Architecture](ARCHITECTURE.md), [Requirements](SRS.md), [Database](DATABASE_SCHEMA.md), [APIs](API_DOCUMENTATION.md), [OCR](OCR_PIPELINE.md), [Analysis](DIABETES_ANALYSIS_SPEC.md), [Clinical validation](CLINICAL_VALIDATION.md), [Security](SECURITY_REVIEW.md), [Tests](TEST_REPORT.md), [Deployment](DEPLOYMENT.md), [Operations](OPERATIONS_RUNBOOK.md), [Recovery](BACKUP_AND_RECOVERY.md), [Privacy](PRIVACY_AND_DATA_RETENTION.md).

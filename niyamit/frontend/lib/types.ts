@@ -198,6 +198,10 @@ export interface Field {
     page?: number | null;
     bboxes?: { page: number; bbox: [number, number, number, number] }[];
     computed?: string;
+    reference_range?: string | null;
+    test_date?: string | null;
+    extraction_provider?: string;
+    extraction_schema?: string;
     engines?: string[];
     alternatives?: {text:string;engine:string;model?:string}[];
   };

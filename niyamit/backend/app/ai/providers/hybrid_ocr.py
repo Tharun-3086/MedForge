@@ -45,7 +45,7 @@ def _paddle(language: str):
                    "text_recognition_model_dir": str(cache / models[language])} if ready else {}
     return PaddleOCR(text_detection_model_name="PP-OCRv5_mobile_det", text_recognition_model_name=models[language],
                      use_doc_orientation_classify=False, use_doc_unwarping=False,
-                     use_textline_orientation=False, device="cpu", enable_mkldnn=False, **directories)
+                     use_textline_orientation=False, device="cpu", enable_mkldnn=False, cpu_threads=2, **directories)
 
 
 @lru_cache(maxsize=1)
@@ -103,24 +103,40 @@ def handwritten_line(image, polygon: list[list[float]]) -> str:
 
 
 def join_rows(blocks: list[dict]) -> list[dict]:
-    """Join disjoint table cells sharing a baseline, retaining each alternative."""
+    """Group by baseline before ordering cells left-to-right.
+
+    OCR boxes have slightly different tops: a unit can arrive before the
+    label to its left. Require pairwise alignment so tall boxes cannot bridge
+    neighbouring rows, and keep overlapping alternatives separate.
+    """
     rows = []
-    for block in sorted(blocks, key=lambda b: (b["bbox"][1], b["bbox"][0])):
-        box = block["bbox"]
-        row = next((r for r in rows if box[0] >= r[-1]["bbox"][2] and
-                    max(0, min(box[3], r[0]["bbox"][3])-max(box[1], r[0]["bbox"][1])) >=
-                    .65 * min(box[3]-box[1], r[0]["bbox"][3]-r[0]["bbox"][1])), None)
+    def aligned(a, b):
+        x, y = a["bbox"], b["bbox"]
+        height = min(x[3] - x[1], y[3] - y[1])
+        overlap = min(x[3], y[3]) - max(x[1], y[1])
+        return (a.get("page") == b.get("page") and height > 0
+                and (x[2] <= y[0] or y[2] <= x[0])
+                and overlap >= .65 * height
+                and abs((x[1] + x[3]) - (y[1] + y[3])) <= height)
+
+    for block in sorted(blocks, key=lambda b: (b.get("page", 1),
+                                              (b["bbox"][1] + b["bbox"][3]) / 2,
+                                              b["bbox"][0])):
+        matches = [r for r in rows if all(aligned(block, cell) for cell in r)]
+        # Ambiguous geometry must not attach a unit/value to a guessed row.
+        row = matches[0] if len(matches) == 1 else None
         if row is None: rows.append([block])
         else: row.append(block)
     result = []
     for row in rows:
+        row.sort(key=lambda b: b["bbox"][0])
         texts = [b["text"] for b in row]
         combined = dict(row[0], text=" ".join(texts),
                         bbox=[min(b["bbox"][0] for b in row), min(b["bbox"][1] for b in row),
                               max(b["bbox"][2] for b in row), max(b["bbox"][3] for b in row)],
                         ocr_conf=min(b["ocr_conf"] for b in row),
                         review_reasons=sorted({reason for b in row for reason in b.get("review_reasons", [])}),
-                        alternatives=[])
+                        source_block_ids=[b["id"] for b in row], alternatives=[])
         for i, block in enumerate(row):
             for alternative in block.get("alternatives", []):
                 combined["alternatives"].append({**alternative, "text": " ".join(texts[:i]+[alternative["text"]]+texts[i+1:])})
@@ -195,6 +211,14 @@ def read_blocks(data: bytes, mime: str, *, style: str = "auto", language: str = 
     from app.ai.providers.local_docs import read_blocks as local_read
     if style not in ("auto", "printed", "handwritten", "mixed") or language not in ("en", "hi", "te"):
         raise ProviderError("hybrid", "INVALID_OPTIONS")
+    if mime == "application/pdf" and style in ("auto", "printed"):
+        from app.ai.providers.local_docs import _pdf_text_blocks
+        native, metadata = _pdf_text_blocks(data)
+        if len(metadata) > settings.max_pdf_pages:
+            raise ProviderError("hybrid", "PAGE_LIMIT")
+        if metadata and all(p.get("text_only") and sum(len(b["text"]) for b in native if b["page"] == p["page"]) >= 40
+                            for p in metadata):
+            return [dict(b, engine="pdf-text-layer") for b in native], metadata, "pdf-text-layer"
     pages_meta = {}
     remaining = settings.ocr_max_handwritten_lines
     def reader(png, *, page):

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db import SessionLocal, utcnow
 from app.models import PatientOtpChallenge, Patient
-from tests.conftest import new_patient
+from tests.conftest import new_patient, register_otp_test_phone
 
 
 def request(c, phone):
@@ -40,7 +40,7 @@ def test_otp_expiry_attempt_limit_and_wrong_phone(nurse, seeded):
     bad='000000' if ch['development_code']!='000000' else '111111'
     for _ in range(5): assert verify(nurse,phone,ch,bad).status_code==401
     assert verify(nurse,phone,ch).status_code==401
-    phone2='+919000410003';ch2=request(nurse,phone2)
+    phone2='+919000410003';register_otp_test_phone(phone2);ch2=request(nurse,phone2)
     with SessionLocal() as db:
         row=db.scalar(select(PatientOtpChallenge).where(PatientOtpChallenge.id==uuid.UUID(ch2['challenge_id'])))
         row.expires_at=utcnow()-timedelta(seconds=1);db.commit()
@@ -48,7 +48,7 @@ def test_otp_expiry_attempt_limit_and_wrong_phone(nurse, seeded):
 
 
 def test_otp_resend_cooldown_invalidates_previous(nurse, seeded):
-    phone='+919000410004';ch=request(nurse,phone)
+    phone='+919000410004';register_otp_test_phone(phone);ch=request(nurse,phone)
     assert nurse.post('/v1/p/otp/request',json={'phone':phone}).status_code==429
     with SessionLocal() as db:
         row=db.scalar(select(PatientOtpChallenge).where(PatientOtpChallenge.id==uuid.UUID(ch['challenge_id'])))

@@ -152,3 +152,15 @@ def patient_session(c: TestClient, staff_email: str, pid: str, birth_year: int =
     c.cookies.clear()
     r = c.post("/v1/p/verify", json={"token": link.rsplit("/p/", 1)[1], "birth_year": birth_year})
     assert r.status_code == 200, r.text
+
+
+def register_otp_test_phone(phone):
+    """Explicit synthetic registration for low-level OTP quota tests."""
+    from app.models import Patient,Clinic
+    from app.db import SessionLocal
+    from sqlalchemy import select
+    with SessionLocal() as db:
+        if db.scalar(select(Patient.id).where(Patient.phone_e164==phone)) is None:
+            clinic_id=db.scalar(select(Clinic.id).limit(1))
+            db.add(Patient(clinic_id=clinic_id,display_name='Synthetic OTP QA',phone_e164=phone,is_synthetic=True))
+            db.commit()

@@ -11,6 +11,7 @@ from app.config import settings
 from app.db import SessionLocal, utcnow
 from app.models import PatientOtpChallenge
 from app.services import twilio_verify
+from tests.conftest import register_otp_test_phone
 
 
 def challenge_row(db, phone):
@@ -26,6 +27,7 @@ def allow_resend(phone):
 
 def test_cooldown_taps_do_not_consume_phone_quota(client):
     phone = '+919000510001'
+    register_otp_test_phone(phone)
     first = client.post('/v1/p/otp/request', json={'phone': phone})
     assert first.status_code == 200
     for _ in range(12):
@@ -42,6 +44,7 @@ def test_cooldown_taps_do_not_consume_phone_quota(client):
 
 def test_successful_send_limit_is_durable_and_resets_after_hour(client):
     phone = '+919000510002'
+    register_otp_test_phone(phone)
     for _ in range(5):
         response = client.post('/v1/p/otp/request', json={'phone': phone})
         assert response.status_code == 200
@@ -76,6 +79,7 @@ def test_shared_network_allows_distinct_patients_and_cooldown_checks_run_first(c
     try:
         for i in range(12):
             phone = f'+91900052{i:04d}'
+            register_otp_test_phone(phone)
             assert client.post('/v1/p/otp/request', json={'phone': phone}).status_code == 200
         for _ in range(8):
             assert client.post('/v1/p/otp/request', json={'phone': phone}).status_code == 429
@@ -87,6 +91,7 @@ def test_shared_network_allows_distinct_patients_and_cooldown_checks_run_first(c
 
 def test_provider_outage_preserves_previous_challenge_and_quota(client, monkeypatch):
     phone = '+919000510003'
+    register_otp_test_phone(phone)
     first = client.post('/v1/p/otp/request', json={'phone': phone}).json()
     allow_resend(phone)
     monkeypatch.setattr(settings, 'patient_otp_provider', 'twilio')
@@ -107,6 +112,7 @@ def test_provider_outage_preserves_previous_challenge_and_quota(client, monkeypa
 
 def test_provider_check_throttle_is_not_a_wrong_code_attempt(client, monkeypatch):
     phone = '+919000510004'
+    register_otp_test_phone(phone)
     challenge = client.post('/v1/p/otp/request', json={'phone': phone}).json()
     with SessionLocal() as db:
         challenge_row(db, phone).code_hash = 'twilio:VE'+'3'*32

@@ -173,3 +173,10 @@ Today includes a patient priority panel: staff-flagged Urgent/High, Needs verifi
 Readings and source review status are visible beside the patient. Routine is blocked while readings are unverified or processing. New/changed reports or readings flag a previous routine assessment for review; existing urgent/high priorities persist until staff changes them. This does not create an emergency alert, follow-up deadline or new care task. Existing doctor-task workflows remain separate. The list is paginated, urgent/high first across pages; category counts/filters refer to the current page. Missing readings or Not assessed must never be interpreted as normal health.
 
 To test, sign in as a synthetic doctor/nurse, open Today, select Assess priority for a patient and save a reason. Filter the current page by priority and verify the audit history. An administrator can view the panel but cannot assign a clinical priority through an administrator role. Reception/platform-operator roles cannot read this clinical panel. Review the source fields in Report inbox before assigning Routine.
+
+
+### Diabetes document intelligence increment
+
+Structured measurements now reach the configured document AI and are reconciled with OCR/rules. AI-only results, unsupported units, unknown parameters and disagreements require source review; unknown parameters cannot be approved into tracked readings. Both patient and clinician histories include an English monitoring summary and authenticated JSON summary download. The summary describes numerical changes and source-copied ranges without diagnosing or setting personal treatment targets.
+
+See [project audit](../PROJECT_AUDIT.md), [analysis specification](../DIABETES_ANALYSIS_SPEC.md), [test report](../TEST_REPORT.md) and [clinical gates](../CLINICAL_VALIDATION.md). Medication history, CGM, structured screening results, comprehensive deletion/export and clinical acceptance remain unfinished. This increment is local; do not present it as a real-patient production release.

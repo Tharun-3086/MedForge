@@ -3,11 +3,16 @@ from app.config import settings
 
 VERIFICATION_REASONS = frozenset({"LOW_OCR_CONFIDENCE", "HANDWRITING_REQUIRES_REVIEW", "OCR_DISAGREEMENT",
     "UNSUPPORTED_HANDWRITING_LANGUAGE", "HANDWRITING_UNAVAILABLE", "OCR_INCOMPLETE", "OCR_FALLBACK",
-    "CONFLICTING_MEASUREMENTS"})
+    "CONFLICTING_MEASUREMENTS", "UNSUPPORTED_MEASUREMENT_UNIT", "AI_MEASUREMENT_REQUIRES_REVIEW",
+    "MEDICAL_SOURCE_NOT_GROUNDED", "MEDICAL_VALUE_UNIT_NOT_GROUNDED", "POSSIBLE_REFERENCE_VALUE",
+    "REFERENCE_RANGE_NOT_GROUNDED", "MEASUREMENT_DATE_NOT_GROUNDED", "FUTURE_MEASUREMENT_DATE", "UNSUPPORTED_MEDICAL_PARAMETER"})
 
 
 def evidence_for(blocks: list[dict], ids: list[str]) -> tuple[dict, list[str], float | None]:
     selected = [b for b in blocks if b["id"] in ids]
+    source_ids = {i for b in selected if b.get("reconstruction") for i in b.get("source_block_ids", [])}
+    selected += [b for b in blocks if b["id"] in source_ids and b not in selected]
+    ids = list(dict.fromkeys(ids + [b["id"] for b in selected]))
     reasons = set()
     scores = []
     for block in selected:

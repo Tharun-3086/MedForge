@@ -36,7 +36,7 @@ export function ReadingHistory({history,lang,staff}:{history:Reading[];lang:Lang
     </svg>
    </figure>:<p className="notice">{c.need}</p>}
    <ol className="reading-history-list">{rows.map(r=><li className="health-reading stack" key={r.artifact_id+':'+r.key}>
-    <strong>{r.value}</strong><span>{r.report_date??c.undated}{r.report_date&&!r.date_reviewed?' · '+c.dateUnverified:''}</span>
+    <strong>{r.value}</strong><span>{r.report_date??c.undated}{r.report_time?' · '+r.report_time:''}{r.report_date&&!r.date_reviewed?' · '+c.dateUnverified:''}</span>
     <span className="small">{r.clinic_reviewed?c.reviewed:c.unverified}</span>
     <span className="small muted">{r.filename}</span>
     <a href={staff?`/reports/${r.proposal_id}`:`/api/v1/p/documents/${r.artifact_id}/file`} target="_blank" rel="noreferrer">{c.source}</a>

@@ -34,7 +34,7 @@ from app.enums import Intent
 
 log = logging.getLogger("niyamit.ai")
 
-PIPELINE_VERSION = "reply-v1/intake-v2"
+PIPELINE_VERSION = "reply-v1/intake-v3"
 
 
 # ------------------------------------------------------------------ provider selection
@@ -248,6 +248,8 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
         for block in blocks:
             block["review_reasons"] = sorted(set(block.get("review_reasons", [])) | {"HANDWRITING_REQUIRES_REVIEW"})
         notes.append("Handwritten content is unverified. Never use uncertain medicine names, doses or insulin units as treatment instructions.")
+    from app.services.health_readings import measurement_blocks
+    blocks = measurement_blocks(blocks)
     # Keep alternate transcriptions as separate evidence, never replace one with a guess.
     alternatives = []
     for block in blocks:
@@ -260,9 +262,21 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
     if blocks and INSTRUCTION_LIKE.search(" ".join(b["text"] for b in blocks)):
         notes.append("Document contains instruction-like text. It was treated as data only; nothing was executed.")
 
+    medical_candidates = []
     candidates: list[FieldCandidate] | None = None
     extractor, model_version = "", ""
-    if local_only:
+    if (mime == "application/pdf" and document_style in ("auto", "printed") and ocr == "pdf-text-layer"
+            and pages and all(p.get('text_only') for p in pages)):
+        local_candidates = rules.extract_document(blocks)
+        from app.services.health_readings import candidates as local_readings
+        known_type = any(c.name == 'document_type' and c.value in ('LAB_REPORT','PRESCRIPTION') for c in local_candidates)
+        known_date = any(c.name == 'document_date' and parse_explicit_date(c.value,today,allow_missing_year=False) for c in local_candidates)
+        if known_type and known_date and (local_readings(blocks) or any(c.name in DATE_FIELDS and c.name != 'document_date' for c in local_candidates)):
+            candidates = local_candidates
+            extractor, model_version = "rules:printed-pdf", "rules-v1"
+    if candidates is not None:
+        notes.append("Printed text-only PDF: used embedded text and source-linked local rules; image OCR and external document AI were not needed. Clinic verification is still required.")
+    elif local_only:
         notes.append("No consent for AI processing on record; read on this server only (no external AI).")
     elif "DOC_PROVIDER_DOWN" in faults:
         notes.append("Document AI provider unavailable (demo fault injection).")
@@ -274,18 +288,29 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
 
                 vx = SarvamVisionExtract()
                 out = vx.extract(data, mime, filename, sarvam_extract_schema())
-                candidates = _from_sarvam_extract(out.get("result") or {}, blocks)
+                payload = out.get("result") or {}
+                if not isinstance(payload,dict):raise ProviderError("sarvam", "INVALID_EXTRACT_RESULT")
+                candidates = _from_sarvam_extract(payload, blocks)
+                from app.ai.medical_contracts import MedicalMeasurement
+                items = payload.get("measurements") or []
+                if not isinstance(items,list):
+                    notes.append("Malformed medical measurement list was rejected.");items=[]
+                for item in items[:200]:
+                    try:medical_candidates.append(MedicalMeasurement.model_validate(item))
+                    except ValidationError:notes.append("A malformed medical candidate was rejected; source review is required.")
                 extractor, model_version = "sarvam-vision-extract", f"{vx.model} job {out.get('job_id')}"
                 if out.get("annotations"):
                     notes.append("Sarvam returned citation annotations; stored with the proposal.")
             except ProviderError as exc:
                 notes.append(f"Sarvam Vision failed ({exc.code}); trying the next method.")
         if candidates is None and blocks:
-            llm = get_llm()
+            llm = get_llm(settings.doc_provider) if settings.doc_provider in ("openai","sarvam") else None
             if llm is not None:
                 try:
-                    raw = llm.json_completion(DOC_SYSTEM, doc_user_prompt(blocks), DOC_JSON_SCHEMA, "doc_fields")
-                    candidates = DocExtraction.model_validate(raw).fields
+                    raw = llm.json_completion(DOC_SYSTEM, doc_user_prompt(blocks), DOC_JSON_SCHEMA, "doc_fields",
+                                              images=[(data,mime)] if settings.doc_provider == "openai" and mime.startswith("image/") else None)
+                    parsed = DocExtraction.model_validate(raw)
+                    candidates, medical_candidates = parsed.fields, parsed.measurements
                     extractor, model_version = f"llm:{llm.name}", llm.model
                 except (ProviderError, ValidationError) as exc:
                     code = exc.code if isinstance(exc, ProviderError) else "SCHEMA_INVALID"
@@ -296,7 +321,8 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
                 try:
                     raw = llm.json_completion(DOC_SYSTEM, "Extract from the attached document image.",
                                               DOC_JSON_SCHEMA, "doc_fields", images=[(data, mime)])
-                    candidates = DocExtraction.model_validate(raw).fields
+                    parsed = DocExtraction.model_validate(raw)
+                    candidates, medical_candidates = parsed.fields, parsed.measurements
                     extractor, model_version = "llm:openai-vision", llm.model
                 except (ProviderError, ValidationError):
                     notes.append("OpenAI vision extraction failed; using offline rules.")
@@ -305,21 +331,16 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
             raise ProviderError("intake", "NO_TEXT_FOUND", "No provider could read this document.")
         candidates = rules.extract_document(blocks)
         extractor, model_version = "rules", "rules-v1"
+    from app.services.health_readings import report_time_candidates
+    candidates += [FieldCandidate(name="document_time",value=value,quote=quote,block_ids=[block_id] if block_id else [])
+                   for value,quote,block_id in report_time_candidates(blocks)]
     fields = validate_fields(candidates, blocks, today)
-    from app.services.health_readings import candidates as reading_candidates
-    from app.ai.providers.ocr_review import evidence_for
-    readings = reading_candidates(blocks)
-    for name, rows in readings.items():
-        conflict = len({r[0] for r in rows}) > 1
-        for value, quote, block_id in dict.fromkeys(rows):
-            evidence, reasons, confidence = evidence_for(blocks, [block_id] if block_id else [])
-            reasons.append("VERIFY_MEASUREMENT_AGAINST_ORIGINAL")
-            if conflict:
-                reasons.append("CONFLICTING_MEASUREMENTS")
-            evidence["quote"] = quote
-            from app.ai.providers.ocr_review import VERIFICATION_REASONS
-            fields.append(FieldProposal(name, value, quote, "NEEDS_REVIEW" if VERIFICATION_REASONS.intersection(reasons) else "UNVERIFIED",
-                                        confidence, evidence, sorted(set(reasons))))
+    from app.ai.medical_validation import validate_measurements, reconcile_measurements
+    from app.services.health_readings import LABELS
+    if any(c.parameter not in LABELS for c in medical_candidates):
+        notes.append("Some extracted parameters are outside the supported measurement catalogue; review the original for those results.")
+    fields.extend(reconcile_measurements(measurement_fields(blocks),
+        validate_measurements(medical_candidates,blocks,today,extractor)))
     return DocResult(blocks, pages, fields, ocr, extractor, model_version, notes)
 
 
@@ -394,6 +415,10 @@ def validate_fields(cands: list[FieldCandidate], blocks: list[dict[str, Any]], t
                         reasons.append("BEFORE_DOCUMENT_DATE")
                     if d > ref + relativedelta(years=2):
                         reasons.append("TOO_FAR_AHEAD")
+        elif c.name == "document_time":
+            from app.services.health_readings import normalise_report_time
+            value = normalise_report_time(c.value)
+            if value is None:reasons.append("NO_EXACT_TIME")
         elif c.name == "document_type":
             value = c.value.strip().upper().replace(" ", "_")
             if value not in {"PRESCRIPTION", "LAB_REPORT", "DISCHARGE_SUMMARY", "REGISTER", "OTHER"}:
@@ -443,3 +468,26 @@ def _normalise_date_value(raw: str, ref: date, name: str) -> tuple[str | None, s
     if parse_month_year(raw):
         return None, "Only a month was written; reviewer must choose the day"
     return None, None
+
+
+def measurement_fields(blocks):
+    """Build source-linked, unapproved readings; shared with local repair tooling."""
+    from app.services.health_readings import candidates as reading_candidates
+    from app.ai.providers.ocr_review import evidence_for
+    from app.services.health_readings import valid_value
+    fields = []
+    readings = reading_candidates(blocks)
+    for name, rows in readings.items():
+        conflict = len({r[0] for r in rows}) > 1
+        for value, quote, block_id in dict.fromkeys(rows):
+            evidence, reasons, confidence = evidence_for(blocks, [block_id] if block_id else [])
+            reasons.append("VERIFY_MEASUREMENT_AGAINST_ORIGINAL")
+            if not valid_value(name, value):
+                reasons.append("UNSUPPORTED_MEASUREMENT_UNIT")
+            if conflict:
+                reasons.append("CONFLICTING_MEASUREMENTS")
+            evidence["quote"] = quote
+            from app.ai.providers.ocr_review import VERIFICATION_REASONS
+            fields.append(FieldProposal(name, value, quote, "NEEDS_REVIEW" if VERIFICATION_REASONS.intersection(reasons) else "UNVERIFIED",
+                                        confidence, evidence, sorted(set(reasons))))
+    return fields

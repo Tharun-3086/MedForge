@@ -90,6 +90,45 @@ def test_table_cells_join_without_losing_uncertain_alternatives():
     assert rows[0]["ocr_conf"]==.3 and rows[0]["bbox"]==[.1,.1,.8,.2]
 
 
+def test_lab_unit_above_label_still_joins_the_correct_row():
+    from app.services.health_readings import extract
+
+    # Actual failed PNG geometry: units had smaller top coordinates than
+    # labels, so the previous left-to-right append rule lost both readings.
+    cells = [
+        {"id":"u1","page":1,"text":"mg/dL","bbox":[.711,.408,.776,.432],"ocr_conf":.99},
+        {"id":"l1","page":1,"text":"Fasting blood glucose 154","bbox":[.074,.411,.624,.431],"ocr_conf":.98},
+        {"id":"u2","page":1,"text":"mg/dL","bbox":[.712,.458,.776,.483],"ocr_conf":.99},
+        {"id":"v2","page":1,"text":"218","bbox":[.582,.460,.624,.479],"ocr_conf":.99},
+        {"id":"l2","page":1,"text":"Post-meal blood glucose","bbox":[.075,.461,.284,.479],"ocr_conf":.99},
+    ]
+    for incoming in (cells, list(reversed(cells))):
+        rows = hybrid_ocr.join_rows(incoming)
+        assert [r['text'] for r in rows] == ['Fasting blood glucose 154 mg/dL', 'Post-meal blood glucose 218 mg/dL']
+        found = extract(rows)
+        assert found['fasting_glucose'][0] == '154 mg/dL'
+        assert found['postmeal_glucose'][0] == '218 mg/dL'
+        assert rows[1]['source_block_ids'] == ['l2', 'v2', 'u2']
+
+
+def test_table_rows_never_join_across_pages_or_overlapping_candidates():
+    cells = [
+        {"id":"a","page":1,"text":"FBS: 110","bbox":[.1,.1,.6,.2],"ocr_conf":.99},
+        {"id":"b","page":1,"text":"FBS: 170","bbox":[.1,.1,.6,.2],"ocr_conf":.99},
+        {"id":"c","page":2,"text":"mg/dL","bbox":[.7,.1,.9,.2],"ocr_conf":.99},
+    ]
+    assert len(hybrid_ocr.join_rows(cells)) == 3
+
+
+def test_tall_box_cannot_bridge_adjacent_measurements():
+    cells = [
+        {"id":"a","page":1,"text":"FBS: 110","bbox":[.1,.1,.6,.12],"ocr_conf":.99},
+        {"id":"b","page":1,"text":"FBS: 170","bbox":[.1,.14,.6,.16],"ocr_conf":.99},
+        {"id":"c","page":1,"text":"mg/dL","bbox":[.7,.09,.9,.17],"ocr_conf":.99},
+    ]
+    assert len(hybrid_ocr.join_rows(cells)) == 3
+
+
 def test_pdf_native_text_still_checks_scanned_regions_in_hybrid_mode(monkeypatch):
     source=(Path(__file__).parents[1]/"samples/lab_report_hba1c.pdf").read_bytes()
     calls=[]
@@ -99,6 +138,58 @@ def test_pdf_native_text_still_checks_scanned_regions_in_hybrid_mode(monkeypatch
         return [{"id":"hand","page":page,"text":"FBS: 170 mg/dL","bbox":[.1,.95,.8,.99],"review_reasons":["HANDWRITING_REQUIRES_REVIEW"]}],[]
     blocks,_,_=local_docs.read_blocks(source,"application/pdf",image_reader=reader,scan_all_pages=True)
     assert calls==[1] and any(b["text"]=="FBS: 170 mg/dL" for b in blocks)
+
+
+@pytest.mark.parametrize('style',['printed','auto'])
+def test_printed_text_pdf_skips_image_models_and_external_ai(monkeypatch,style):
+    monkeypatch.setattr(settings,'ocr_provider','hybrid')
+    blocks=[{'id':'a','page':1,'text':'LAB REPORT','bbox':[.1,.1,.8,.15]},
+            {'id':'b','page':1,'text':'Report date: 2026-11-27','bbox':[.1,.2,.8,.25]},
+            {'id':'c','page':1,'text':'FBS: 142 mg/dL','bbox':[.1,.3,.8,.35]}]
+    monkeypatch.setattr(local_docs,'_pdf_text_blocks',lambda data:(blocks,[{'page':1,'width':600,'height':800,'text_only':True}]))
+    monkeypatch.setattr(hybrid_ocr,'read_image',lambda *a,**k:pytest.fail('Unneeded image OCR'))
+    monkeypatch.setattr(pipeline,'get_llm',lambda *a:pytest.fail('Unneeded external AI'))
+    from app.ai.providers.sarvam import SarvamVisionExtract
+    monkeypatch.setattr(SarvamVisionExtract,'extract',lambda *a,**k:pytest.fail('Unneeded document AI'))
+    result=pipeline.extract_document(b'%PDF','application/pdf','lab.pdf',today=date(2026,11,27),document_style=style)
+    assert result.ocr_provider=='pdf-text-layer' and result.extractor=='rules:printed-pdf'
+    assert any(f.name=='fasting_glucose' and f.value=='142 mg/dL' for f in result.fields)
+
+
+@pytest.mark.parametrize('style,text_only',[('printed',False),('auto',False),('handwritten',False),('mixed',False),('handwritten',True),('mixed',True)])
+def test_pdf_with_image_annotation_or_explicit_handwriting_keeps_ocr(monkeypatch,style,text_only):
+    blocks=[{'id':'a','page':1,'text':'LAB REPORT WITH ENOUGH PRINTED TEXT TO OTHERWISE QUALIFY','bbox':[.1,.1,.8,.2]}]
+    monkeypatch.setattr(local_docs,'_pdf_text_blocks',lambda data:(blocks,[{'page':1,'width':600,'height':800,'text_only':text_only}]))
+    monkeypatch.setattr(local_docs,'render_pdf_page',lambda *a:png())
+    calls=[]
+    def image_reader(*a,**k):
+        calls.append(1)
+        return [{'id':'scan','page':1,'text':'Review on 11 December 2026','bbox':[.1,.5,.8,.6]}],[{'page':1}]
+    monkeypatch.setattr(hybrid_ocr,'read_image',image_reader)
+    actual,_,method=hybrid_ocr.read_blocks(b'%PDF','application/pdf',style=style)
+    assert calls and method=='hybrid' and any('Review on' in b['text'] for b in actual)
+
+
+def test_automatic_pdf_with_too_little_text_keeps_image_ocr(monkeypatch):
+    monkeypatch.setattr(local_docs,'_pdf_text_blocks',lambda data:([{'id':'a','page':1,'text':'Rx','bbox':[.1,.1,.2,.2]}],[{'page':1,'text_only':True}]))
+    monkeypatch.setattr(local_docs,'render_pdf_page',lambda *a:png())
+    calls=[]
+    def image_reader(*a,**k):
+        calls.append(1)
+        return [{'id':'scan','page':1,'text':'Review on 11 December 2026','bbox':[.1,.5,.8,.6]}],[{'page':1}]
+    monkeypatch.setattr(hybrid_ocr,'read_image',image_reader)
+    _,_,method=hybrid_ocr.read_blocks(b'%PDF','application/pdf',style='auto')
+    assert calls and method=='hybrid'
+
+
+def test_local_pdf_engine_also_requires_text_only_metadata_for_fast_rules(monkeypatch):
+    monkeypatch.setattr(settings,'ocr_provider','local')
+    blocks=[{'id':'a','page':1,'text':'LAB REPORT'},
+            {'id':'b','page':1,'text':'Report date: 2026-11-27'},
+            {'id':'c','page':1,'text':'FBS: 142 mg/dL'}]
+    monkeypatch.setattr(local_docs,'read_blocks',lambda *a,**k:(blocks,[{'page':1,'text_only':False}],'pdf-text-layer'))
+    result=pipeline.extract_document(b'%PDF','application/pdf','mixed.pdf',today=date(2026,11,27),document_style='printed',local_only=True)
+    assert result.extractor=='rules'
 
 
 def test_local_consent_path_does_not_call_external_document_ai(monkeypatch):

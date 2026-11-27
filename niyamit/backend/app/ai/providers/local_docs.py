@@ -62,7 +62,8 @@ def _pdf_text_blocks(data: bytes) -> tuple[list[dict[str, Any]], list[dict[str, 
     with pdfplumber.open(io.BytesIO(data)) as pdf:
         for pno, page in enumerate(pdf.pages, start=1):
             w, h = float(page.width), float(page.height)
-            pages.append({"page": pno, "width": w, "height": h})
+            pages.append({"page": pno, "width": w, "height": h,
+                          "text_only": not bool(page.images or page.curves or page.annots)})
             words = page.extract_words(keep_blank_chars=False, use_text_flow=True)
             lines: list[list[dict[str, Any]]] = []
             for word in sorted(words, key=lambda x: (round(x["top"]), x["x0"])):

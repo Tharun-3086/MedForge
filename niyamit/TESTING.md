@@ -1,5 +1,57 @@
 # Verification and manual acceptance
 
+## Automatic printed-PDF routing, 27 November 2026
+
+215 backend tests passed. Both Automatic and Printed select the native-text fast
+path when every PDF page has sufficient readable text and no embedded images,
+curves or annotations. Explicit Handwritten/Mixed, insufficient text and mixed
+content retain OCR. The same eligibility guard controls skipping external AI.
+
+Actual default-style uploads (document_style deliberately omitted) completed
+upload-to-extraction in 0.489 seconds from the patient endpoint and 0.166 seconds
+from the clinic endpoint for the two synthetic lab PDFs. Both used pdf-text-layer
+and rules:printed-pdf, initially required clinic review, and retained correct
+measurements, date and time. After review, patient and clinic API results matched.
+These sample timings are not a general latency guarantee. Acceptance used a
+separate synthetic QA patient; Ramesh's manual test records were not modified.
+Local backend/worker rebuilt and restarted. No Git commit, push or hosted deploy.
+
+## Printed PDF latency fix, 27 November 2026
+
+208 backend tests passed. Explicitly printed PDFs with sufficient native text
+and no images, curves or annotations avoid image OCR; recognised lab/visit
+documents with an explicit date and supported fields use local source-linked
+rules without waiting for external document AI. Scanned/mixed/handwritten PDFs
+retain the OCR path. Paddle CPU threads are capped at two for the local worker.
+Actual extraction-only timings were 0.149 seconds for the HbA1c PDF and 0.038
+seconds for the glucose PDF; cold-model glucose PNG extraction took 23.787
+seconds. These are fixture timings, not end-to-end latency guarantees.
+
+The existing pending Ramesh glucose upload was requeued through the normal,
+idempotent job dispatcher after replacing the worker. It completed with the
+correct 142/190 mg/dL readings, 27 November date and 14:56:38 report time. The
+patient browser showed Waiting for clinic review; no fields were auto-approved
+and no duplicate upload was created. No Git push or hosted deployment occurred.
+
+## Same-day report-time ordering, 27 November 2026
+
+205 PostgreSQL/Alembic tests, two trend tests and the frontend production build
+passed. New tests cover reversed same-day upload order, later report dates,
+AM/PM conversion, invalid clocks, collection-vs-report precedence, ignoring
+received/approved/upload timestamps, and extraction through staff review to the
+patient API. A collection/report clock must be approved before it affects
+same-day ordering. Local services were rebuilt/restarted; no hosted deployment.
+
+## Table assembly fix, 27 November 2026
+
+202 backend tests passed, including regressions for shifted OCR cell baselines,
+page isolation and tall boxes. Actual Docker patient/clinic acceptance captured
+all ten lab values from both PDFs and PNGs, and a synthetic cursive-font follow-up
+date with a mandatory verification note. Both interfaces showed all 12 expected
+reviewed readings. The future follow-up was confirmed and left open. A separate
+historical handwritten sample remained unverified and produced no invented plan;
+its clinical details were not reliably read. See [the acceptance record](TABLE_OCR_CHECK.md).
+
 ## Final patient journey, 26 November 2026
 
 199 PostgreSQL/Alembic tests, two trend tests and final frontend build/type check

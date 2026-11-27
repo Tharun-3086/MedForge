@@ -3,10 +3,11 @@ UNVERIFIED/NEEDS_REVIEW until an authorised person approves or corrects each one
 from __future__ import annotations
 
 import uuid
+import hashlib
 from datetime import date, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app import storage
@@ -38,6 +39,23 @@ def upload(db: Session, clinic: Clinic, patient: Patient | None, data: bytes, fi
            staff: Staff | None = None, by_patient: bool = False, document_style: str = "auto",
            document_language: str = "en") -> tuple[SourceArtifact, ExtractionProposal]:
     vf = storage.validate_document(data, filename)
+    # Serialize identical patient-scoped uploads without a migration that would
+    # destroy legacy duplicates. Another clinic/patient never reuses this row.
+    identity=f"{clinic.id}:{patient.id if patient else ''}:{vf.sha256}:{source_type}:{document_style}:{document_language}"
+    lock_key=int.from_bytes(hashlib.sha256(identity.encode()).digest()[:8], 'big', signed=True)
+    db.execute(select(func.pg_advisory_xact_lock(lock_key)))
+    existing=db.execute(select(SourceArtifact,ExtractionProposal).join(ExtractionProposal,ExtractionProposal.artifact_id==SourceArtifact.id)
+        .where(SourceArtifact.clinic_id==clinic.id,SourceArtifact.patient_id==(patient.id if patient else None),
+               ExtractionProposal.clinic_id==clinic.id,ExtractionProposal.patient_id==(patient.id if patient else None),
+               SourceArtifact.sha256==vf.sha256,SourceArtifact.source_type==source_type,
+               SourceArtifact.document_style==document_style,SourceArtifact.document_language==document_language,
+               SourceArtifact.deleted_at.is_(None),ExtractionProposal.status!='REJECTED')
+        .order_by(SourceArtifact.created_at.desc()).limit(1)).first()
+    if existing:
+        audit(db,clinic_id=clinic.id,action='DUPLICATE_DOCUMENT_REUSED',actor=staff,
+              actor_type='PATIENT' if by_patient else None,actor_id=str(patient.id) if by_patient and patient else '',
+              object_type='source_artifact',object_id=existing[0].id,patient_id=existing[0].patient_id)
+        return existing[0],existing[1]
     art_id = uuid.uuid4()
     key = storage.store(clinic.id, art_id, vf.data)
     artifact = SourceArtifact(
@@ -45,7 +63,7 @@ def upload(db: Session, clinic: Clinic, patient: Patient | None, data: bytes, fi
         uploaded_by_user_id=staff.user_id if staff else None, uploaded_by_patient=by_patient,
         source_type=SourceType(source_type), filename=vf.filename, mime_type=vf.mime, size_bytes=len(vf.data),
         page_count=vf.page_count, document_style=document_style, document_language=document_language,
-        sha256=vf.sha256, storage_key=key, is_synthetic=True,
+        sha256=vf.sha256, storage_key=key, is_synthetic=bool(clinic.is_synthetic and (patient is None or patient.is_synthetic)),
         retention_until=utcnow() + timedelta(days=clinic.document_retention_days))
     db.add(artifact)
     db.flush()  # the proposal references the artifact row
@@ -122,6 +140,8 @@ def review_field(db: Session, staff: Staff, proposal: ExtractionProposal, field:
     if action == "REJECT":
         field.status = FieldStatus.REJECTED
     elif action in ("APPROVE", "CORRECT"):
+        if field.name == 'unmapped_measurement':
+            raise HTTPException(422, "This parameter is not supported for verified tracking. Review the original; reject this candidate or record it through an approved clinical workflow.")
         from app.ai.providers.ocr_review import VERIFICATION_REASONS
         if action == "APPROVE" and VERIFICATION_REASONS.intersection(field.review_reasons or []) and not reason:
             raise HTTPException(422, "Check the original and give a verification note before confirming this uncertain reading.")
@@ -136,6 +156,11 @@ def review_field(db: Session, staff: Staff, proposal: ExtractionProposal, field:
                 date.fromisoformat(new_value)
             except ValueError:
                 raise HTTPException(422, "Enter the date as YYYY-MM-DD before approving.") from None
+        if field.name == 'document_time':
+            from app.services.health_readings import normalise_report_time
+            new_value=normalise_report_time(new_value)
+            if new_value is None:
+                raise HTTPException(422, "Enter the collection/report time as HH:MM or HH:MM:SS.")
         if not new_value:
             raise HTTPException(422, "This field has no value to approve. Correct it first.")
         if action == "CORRECT" and not reason:

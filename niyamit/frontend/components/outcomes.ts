@@ -84,6 +84,15 @@ export const REVIEW_REASONS: Record<string, string> = {
   HANDWRITING_UNAVAILABLE: "The handwriting model could not read this line.",
   OCR_INCOMPLETE: "Document reading is incomplete. Check every source page.",
   OCR_FALLBACK: "PaddleOCR was unavailable. Tesseract fallback needs verification.",
+  UNSUPPORTED_MEDICAL_PARAMETER: "This parameter is not supported for verified tracking. Review the original; it cannot be approved into the health dashboard.",
+  AI_MEASUREMENT_REQUIRES_REVIEW: "AI-extracted measurement: verify the result, unit and source row before confirming.",
+  MEDICAL_SOURCE_NOT_GROUNDED: "The AI quote could not be matched to the OCR source. Compare the original image.",
+  MEDICAL_VALUE_UNIT_NOT_GROUNDED: "The proposed value and unit do not match the quoted result clearly. Correct them from the original.",
+  POSSIBLE_REFERENCE_VALUE: "This may be a reference limit rather than the patient's result. Check the source columns.",
+  REFERENCE_RANGE_NOT_GROUNDED: "The proposed laboratory range could not be matched to the source.",
+  MEASUREMENT_DATE_NOT_GROUNDED: "The proposed measurement date could not be verified from the source page.",
+  FUTURE_MEASUREMENT_DATE: "The extracted measurement date is in the future. Check the original date.",
+  UNSUPPORTED_MEASUREMENT_UNIT: "The unit may be misread. Check the original and correct the value and unit before confirming.",
   CONFLICTING_MEASUREMENTS: "Conflicting values were found. Confirm the correct one and reject the others.",
   CONFLICTING_VALUES: "The document gives different values for this field. Check which one is right.",
   NO_EXACT_DATE: "No exact date is written. Enter the date yourself or reject this field.",
@@ -120,4 +129,4 @@ export const TEMPLATE_NAMES: Record<string, string> = {
 
 export const templateName = (key: string): string => TEMPLATE_NAMES[key] ?? key.toLowerCase().replace(/_/g, " ");
 
-export const OCR_VERIFICATION_REASONS = ["LOW_OCR_CONFIDENCE", "HANDWRITING_REQUIRES_REVIEW", "OCR_DISAGREEMENT", "UNSUPPORTED_HANDWRITING_LANGUAGE", "HANDWRITING_UNAVAILABLE", "OCR_INCOMPLETE", "OCR_FALLBACK", "CONFLICTING_MEASUREMENTS"];
+export const OCR_VERIFICATION_REASONS = ["LOW_OCR_CONFIDENCE", "HANDWRITING_REQUIRES_REVIEW", "OCR_DISAGREEMENT", "UNSUPPORTED_HANDWRITING_LANGUAGE", "HANDWRITING_UNAVAILABLE", "OCR_INCOMPLETE", "OCR_FALLBACK", "CONFLICTING_MEASUREMENTS", "UNSUPPORTED_MEASUREMENT_UNIT", "AI_MEASUREMENT_REQUIRES_REVIEW", "MEDICAL_SOURCE_NOT_GROUNDED", "MEDICAL_VALUE_UNIT_NOT_GROUNDED", "POSSIBLE_REFERENCE_VALUE", "REFERENCE_RANGE_NOT_GROUNDED", "MEASUREMENT_DATE_NOT_GROUNDED", "FUTURE_MEASUREMENT_DATE", "UNSUPPORTED_MEDICAL_PARAMETER"];
