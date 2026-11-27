@@ -23,6 +23,7 @@ jobs:
         run: |
           npm ci
           npm run typecheck
+          npm run test:trends
           npm audit --omit=dev --audit-level=high
       - name: Build and start all services
         run: docker compose up -d --build --wait --wait-timeout 180

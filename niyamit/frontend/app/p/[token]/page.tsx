@@ -11,7 +11,7 @@ import { HealthReadings } from "@/components/patient/health-readings";
 import { DocumentAnalysis } from "@/components/patient/document-analysis";
 import { BarrierPicker, FamilyView, PassportView, ReportUpload } from "@/components/patient/views";
 import { BrandMark } from "@/components/ui";
-import { api, ApiError, clientKey } from "@/lib/api";
+import { api, ApiError, clientKey, usePoll } from "@/lib/api";
 import { fmtDate, fmtLongDay, fmtTime, leafParts } from "@/lib/format";
 import { asLang, dueText, LANGS, t, tItemKind, type Lang } from "@/lib/i18n";
 import type { Item } from "@/lib/types";
@@ -65,6 +65,8 @@ export default function PatientApp() {
     setLang(asLang(h.patient.language));
     return h;
   }, []);
+
+  usePoll(phase === "ready", () => void loadHome().catch(() => undefined), 15000);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -198,8 +200,8 @@ export default function PatientApp() {
           <>
             <h1>{t(lang, "hello", { name: home.patient.first_name })}</h1>
             <button className="pt-link" onClick={async () => { await api("/v1/p/logout", {method:"POST"}); router.replace("/patient"); }}>{lang === "hi" ? "साइन आउट" : lang === "te" ? "సైన్ అవుట్" : "Sign out"}</button>
+            <HealthReadings lang={lang} onUpload={() => navigateCare("report")} />
             <CareActions lang={lang} onSelect={navigateCare} />
-            <HealthReadings lang={lang} />
             <DocumentAnalysis lang={lang} onRefresh={loadHome} />
             {home.patient.opted_out ? (
               <div className="notice">{t(lang, "remindersOff")} <button className="pt-link" onClick={() => choose("START")}>{t(lang, "startReminders")}</button></div>

@@ -67,6 +67,7 @@ export const ACTION_STATUS_LABELS: Record<string, string> = {
 };
 
 export const PROPOSAL_STATUS: Record<string, [string, "wait" | "done" | "fail" | "info" | "neutral"]> = {
+  REVIEWED: ["Clinic review complete", "done"],
   EXTRACTION_PENDING: ["Reading the document", "info"],
   NEEDS_REVIEW: ["Needs review", "wait"],
   EXTRACTION_FAILED: ["Could not be read", "fail"],
@@ -75,6 +76,15 @@ export const PROPOSAL_STATUS: Record<string, [string, "wait" | "done" | "fail" |
 };
 
 export const REVIEW_REASONS: Record<string, string> = {
+  VERIFY_MEASUREMENT_AGAINST_ORIGINAL: "Check the number and unit against the original report.",
+  LOW_OCR_CONFIDENCE: "Uncertain OCR: verify the value, unit and original image.",
+  HANDWRITING_REQUIRES_REVIEW: "Handwriting requires clinic verification.",
+  OCR_DISAGREEMENT: "Reading engines disagree. Compare each candidate with the original.",
+  UNSUPPORTED_HANDWRITING_LANGUAGE: "Hindi/Telugu handwriting needs manual verification.",
+  HANDWRITING_UNAVAILABLE: "The handwriting model could not read this line.",
+  OCR_INCOMPLETE: "Document reading is incomplete. Check every source page.",
+  OCR_FALLBACK: "PaddleOCR was unavailable. Tesseract fallback needs verification.",
+  CONFLICTING_MEASUREMENTS: "Conflicting values were found. Confirm the correct one and reject the others.",
   CONFLICTING_VALUES: "The document gives different values for this field. Check which one is right.",
   NO_EXACT_DATE: "No exact date is written. Enter the date yourself or reject this field.",
   BEFORE_DOCUMENT_DATE: "This date is earlier than the document date.",
@@ -109,3 +119,5 @@ export const TEMPLATE_NAMES: Record<string, string> = {
 };
 
 export const templateName = (key: string): string => TEMPLATE_NAMES[key] ?? key.toLowerCase().replace(/_/g, " ");
+
+export const OCR_VERIFICATION_REASONS = ["LOW_OCR_CONFIDENCE", "HANDWRITING_REQUIRES_REVIEW", "OCR_DISAGREEMENT", "UNSUPPORTED_HANDWRITING_LANGUAGE", "HANDWRITING_UNAVAILABLE", "OCR_INCOMPLETE", "OCR_FALLBACK", "CONFLICTING_MEASUREMENTS"];

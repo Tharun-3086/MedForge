@@ -39,7 +39,7 @@ def queue(offset:int=Query(0,ge=0),limit:int=Query(50,ge=1,le=100),staff:Staff=D
     for patient in patients:
         snapshot=latest(db,patient.id,staff.clinic_id);readings=snapshot['readings'];a=db.get(PatientPriority,patient.id)
         bucket,verification,changed=state(readings,a,snapshot['source_revision'])
-        if snapshot['processing']:
+        if snapshot['processing'] or snapshot.get('pending_verification_count',0):
             verification=True
             if bucket not in ('URGENT','HIGH'):bucket='VERIFY'
         rows.append({'patient_id':str(patient.id),'name':patient.display_name,'bucket':bucket,'needs_verification':verification,
@@ -56,7 +56,7 @@ def assess(patient_id:uuid.UUID,body:AssessmentIn,staff:Staff=Depends(write),db:
     patient=db.scalar(select(Patient).where(Patient.id==patient_id,Patient.clinic_id==staff.clinic_id).with_for_update())
     if patient is None:raise HTTPException(404,'Patient not found.')
     snapshot=latest(db,patient.id,staff.clinic_id);readings=snapshot['readings']
-    if body.priority=='ROUTINE' and (snapshot['processing'] or any(not v['clinic_reviewed'] for v in readings)):
+    if body.priority=='ROUTINE' and (snapshot['processing'] or snapshot.get('pending_verification_count',0) or any(not v['clinic_reviewed'] for v in readings)):
         raise HTTPException(409,'Verify the extracted readings in Report inbox before marking routine.')
     a=db.get(PatientPriority,patient.id);previous=a.priority if a else None
     if a is None:a=PatientPriority(patient_id=patient.id,clinic_id=staff.clinic_id);db.add(a)
@@ -64,3 +64,10 @@ def assess(patient_id:uuid.UUID,body:AssessmentIn,staff:Staff=Depends(write),db:
     audit(db,clinic_id=staff.clinic_id,action='PATIENT_PRIORITY_ASSESSED',actor=staff,patient_id=patient.id,
           detail={'previous':previous,'priority':body.priority,'reason':a.reason,'basis':'STAFF_ASSESSMENT'})
     db.commit();return {'ok':True}
+
+
+@router.get("/{patient_id}/health-readings")
+def patient_health_history(patient_id:uuid.UUID,staff:Staff=Depends(read),db:Session=Depends(get_db)):
+    patient=db.scalar(select(Patient).where(Patient.id==patient_id,Patient.clinic_id==staff.clinic_id))
+    if patient is None:raise HTTPException(404,'Patient not found.')
+    return latest(db,patient.id,staff.clinic_id)

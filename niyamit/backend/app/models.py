@@ -218,6 +218,8 @@ class SourceArtifact(Base):
     mime_type: Mapped[str] = mapped_column(String(80))
     size_bytes: Mapped[int] = mapped_column(Integer)
     page_count: Mapped[int] = mapped_column(Integer, default=1)
+    document_style: Mapped[str] = mapped_column(String(20), default="auto", server_default="auto")
+    document_language: Mapped[str] = mapped_column(String(10), default="en", server_default="en")
     sha256: Mapped[str] = mapped_column(String(64))
     storage_key: Mapped[str] = mapped_column(String(300))
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=True)

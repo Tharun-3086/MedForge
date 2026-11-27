@@ -1,3 +1,49 @@
+# Latest local update: extended report history (26 November 2026)
+
+Final patient journey acceptance: 199 backend tests, two trend tests and final
+frontend build/type check passed. Fresh actual uploads exercised printed,
+cursive-font and PDF reports through clinical review, plan approval, patient
+confirmation, document-task resolution and simulated clinician-recorded visit
+completion. Access isolation and logout passed. Fixed stuck lab-review status,
+pending health review after plan approval, document-task closure, automatic
+patient refresh and AI-consent enforcement for Listen. My records retains
+clinic-recorded care history. See PATIENT_FLOW_CHECK.md. Hosted/physical-device
+acceptance remains separate; no Git push, hosted deploy or APK rebuild in this pass.
+
+Release preparation: Ramesh's fixed public synthetic demo now has three clearly
+watermarked fictional source reports and 36 fixture-verified measurements with
+three-date trends. Additive initialization on demo startup preserves existing
+records and skips non-demo/production. 196 backend tests passed. Hosted APK
+0.3.0-demo/code 3 was built and signature-verified with the same certificate as
+the previous APK. No install on a physical device/emulator was performed. Git
+candidates passed sensitive-filename/current-secret-value checks. Full push,
+merge, backend-first Render and APK release steps are in RELEASE_0.3_DEMO.md.
+No push/merge/hosted deployment/public release was performed by the assistant.
+
+Added serum creatinine, eGFR, UACR, total/LDL/HDL cholesterol, triglycerides and weight with explicit units. Patients and authorised clinic staff share source-linked history and latest values. Charts use only clinic-confirmed values/dates, keep units and glucose types separate, and exclude same-date conflicts and inequalities. Uncertain readings remain behind clinic verification; pending readings also prevent routine priority assignment. No automatic diagnosis or thresholds were introduced.
+
+194 PostgreSQL/Alembic tests, two trend tests and the frontend production build/type check passed. Actual local Docker uploads produced 16 reviewed entries from two synthetic printed reports. A doctor verified a newer cursive-font creatinine result through the UI, and the confirmed value reached patient history/trends. Sarvam structured chat and a synthetic Document AI extraction succeeded without exposing keys or sending real patient data. Local images/services updated; no push, Render deployment or APK rebuild performed. READINGS.md documents rules, validation and the local source-image build fallback after a slow apt download.
+
+---
+
+# Earlier local update: hybrid OCR and verification (22 November 2026)
+
+Patient visibility follow-up: moved the health summary above the large action tiles. HbA1c, blood glucose (with fasting/post-meal/random types kept separate) and blood pressure now have persistent patient-facing cards, including explicit missing-reading states and a direct upload button. Report dates, source details and clinic verification labels remain visible. These are report-based values, not continuous glucose monitoring or inferred clinical statistics. The shared Ramesh demo currently has no uploaded measurements; values are never copied from another QA patient.
+
+Added optional local PaddleOCR and experimental English TrOCR, retaining Tesseract fallback. PDFs route per page, including scanned regions on native-text pages in hybrid mode. Uploads persist writing style and document language. Extracted fields preserve source coordinates, engine identity, confidence routing hints and conflicting alternatives.
+
+Uncertain measurements stay out of latest patient readings until clinic verification. A doctor or nurse must supply a verification/correction note. Conflicting candidates and report-date alternatives require resolution. Patient and clinic interfaces expose upload options, uncertainty messages and source comparison.
+
+Validation: 192 PostgreSQL/Alembic tests passed, frontend production build passed, and mocked mobile UI checks passed. Actual PaddleOCR and TrOCR were exercised through patient upload, extraction, review gating, staff correction and patient retrieval in an isolated PostgreSQL/API check using synthetic printed/cursive-font images. This is not real medical handwriting validation. Hindi/Telugu handwriting remains manual review. Medication interpretation, autonomous diagnosis, new clinical thresholds and longitudinal analysis were not added.
+
+OCR.md documents setup, optional worker model preparation and limitations. No Git push or hosted deployment was performed. Deploy the migration/backend before the frontend. A heavier worker is required to enable the optional models; the small hosted API can retain its lightweight fallback.
+
+Follow-up local Docker acceptance: safely purged disposable pip caches using pip's cleaner (about 3.84 GB on C and 0.89 GB on D), reset the temporary native test environment, and moved future pip caching to D:/Caches/pip. Docker WSL data already targets D:/Docker/wsl via its existing junction. A database backup was saved before applying the additive migration. The heavy worker image now builds and runs; real offline PaddleOCR/TrOCR/fallback container checks passed.
+
+Actual browser uploads through the Docker app passed for synthetic printed and cursive-font reports. Printed BP/glucose/HbA1c reached the patient; the uncertain cursive reading was withheld until a nurse checked the original and recorded confirmation/correction notes, after which the newer clinic-reviewed glucose appeared. TrOCR's incorrect unit stayed visible as alternative evidence. Fixed a raw technical review label. The local hybrid stack remains running; no Git push or Render deployment was performed. Real clinical handwriting accuracy remains unvalidated.
+
+---
+
 # Latest local update: patient OTP retries and demo recording kit
 
 The friend reported too many requests after Send SMS code. Inspection found that premature taps and failed provider sends consumed process-memory phone/IP quotas, with a misleading one-minute message for an hour-long limit. The exact provider response from the friend's attempt was not available, so a provider throttle/trial restriction cannot be excluded.

@@ -198,6 +198,8 @@ export interface Field {
     page?: number | null;
     bboxes?: { page: number; bbox: [number, number, number, number] }[];
     computed?: string;
+    engines?: string[];
+    alternatives?: {text:string;engine:string;model?:string}[];
   };
   review_reasons: string[];
   reviewed_at: string | null;
@@ -234,7 +236,7 @@ export interface Proposal {
   artifact: Artifact | null;
   patient: PatientBrief | null;
   page_sizes: { page: number; width: number; height: number }[];
-  blocks?: { id: string; page: number; text: string; bbox: [number, number, number, number] | null }[];
+  blocks?: { id: string; page: number; text: string; bbox: [number, number, number, number] | null;engine?:string;ocr_conf?:number|null;review_reasons?:string[];alternatives?:{text:string;engine:string}[] }[];
   can_approve?: boolean;
   today?: string;
   plan?: Plan;

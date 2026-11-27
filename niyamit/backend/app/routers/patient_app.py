@@ -41,6 +41,7 @@ from app.security import (
 from app.services import booking, caregivers, guards, intake, patients, replies, views, patient_otp
 from app.services.common import active_items, clinic_today, clinic_tz, current_item, first_name, slot_label
 from app.services.replies import EXPLICIT
+from app.services.links import has_consent
 
 router = APIRouter(prefix="/v1/p", tags=["patient-app"])
 caregiver_router = APIRouter(prefix="/v1/c", tags=["caregiver"])
@@ -110,7 +111,7 @@ def home_payload(db: Session, patient: Patient, clinic: Clinic) -> dict:
         "pending": reply_view(pending) if pending else None,
         "consents": patients.consent_state(db, patient.id),
         "voice_available": pipeline.get_asr() is not None,
-        "tts_available": pipeline.get_tts() is not None,
+        "tts_available": has_consent(db, patient.id, ConsentPurpose.AI_PROCESSING) and pipeline.get_tts() is not None,
         "today": today.isoformat(),
     }
 
@@ -366,6 +367,8 @@ def reply_audio(reply_id: str, i: int = Query(0, ge=0, le=10), me: PatientPrinci
     rate_limit(f"ptts:{me.patient_id}", 15, 60)
     patient, _ = _ctx(db, me)
     reply = guards.own_reply(db, me, reply_id)
+    if not has_consent(db, patient.id, ConsentPurpose.AI_PROCESSING):
+        raise HTTPException(403, "Allow AI processing before using external voice playback.")
     acts = reply.actions or []
     if i >= len(acts):
         raise HTTPException(404, "Nothing to read.")
@@ -441,11 +444,14 @@ def passport(me: PatientPrincipal = Depends(current_patient), db: Session = Depe
 @router.post("/documents", status_code=201)
 async def upload_document(file: UploadFile = File(...),
                           source_type: Literal["PRESCRIPTION", "LAB_REPORT", "OTHER"] = Form("LAB_REPORT"),
+                          document_style: Literal["auto", "printed", "handwritten", "mixed"] = Form("auto"),
+                          document_language: Literal["en", "hi", "te"] = Form("en"),
                           me: PatientPrincipal = Depends(current_patient), db: Session = Depends(get_db)) -> dict:
     rate_limit(f"pdoc:{me.patient_id}", 10, 3600)
     patient, clinic = _ctx(db, me)
     data = await read_limited(file, settings.max_upload_mb)
-    artifact, _ = intake.upload(db, clinic, patient, data, file.filename or "report", source_type, by_patient=True)
+    artifact, _ = intake.upload(db, clinic, patient, data, file.filename or "report", source_type, by_patient=True,
+                                document_style=document_style, document_language=document_language)
     db.commit()
     return {"filename": artifact.filename, "status": "Received — the clinic team will review it.",
             "uploaded_at": S.iso(artifact.created_at)}
@@ -462,7 +468,9 @@ def patient_documents(me: PatientPrincipal = Depends(current_patient), db: Sessi
     return {"documents": [{"id": str(a.id), "filename": a.filename, "uploaded_at": S.iso(a.created_at),
         "status": p.status if p else "RECEIVED", "ocr_provider": p.ocr_provider if p else "",
         "automatic_fields": [{"label": S.FIELD_LABELS.get(f.name, f.name), "value": f.proposed_value,
-                              "as_written": f.extracted_value, "review_status": f.status} for f in p.fields] if p else [],
+                              "as_written": f.extracted_value, "review_status": f.status,
+                              "review_reasons": f.review_reasons} for f in p.fields] if p else [],
+        "verification_required": any(f.status == "NEEDS_REVIEW" for f in p.fields) if p else False,
         "automatic_text": "\n".join(str(b.get("text", "")) for b in (p.blocks or []))[:30000] if p else "",
         "clinic_reviewed_fields": [{"label": S.FIELD_LABELS.get(f.name, f.name), "value": f.value,
                                     "reviewed_at": S.iso(f.reviewed_at)} for f in p.fields if f.status == "APPROVED"] if p else [],

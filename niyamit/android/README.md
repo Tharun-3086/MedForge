@@ -24,7 +24,7 @@ cd D:\niyamit\MedForge-Git\niyamit\android
 
 Defaults: SDK D:/Android/Sdk, JDK D:/androidstd/jbr, Build Tools 36.0.0, platform android-37.0. Override -Sdk and -Jdk on another machine. Output: build/Niyamit-debug.apk. The script uses official SDK aapt2, javac, d8, zipalign and apksigner and verifies the final signature. Build output and debug signing keys are ignored by Git.
 
-The current demo version is `0.2-demo` (version code `2`). The SDK script accepts `-VersionCode` and `-VersionName` overrides. Keep the same local debug keystore to install an update over the previous demo APK.
+The current demo version is `0.3.0-demo` (version code `3`). The SDK script accepts `-VersionCode` and `-VersionName` overrides. Keep the same local debug keystore to install an update over the previous demo APK.
 
 For the hosted demo:
 

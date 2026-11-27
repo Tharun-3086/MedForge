@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { HealthReadings } from "@/components/patient/health-readings";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
@@ -30,7 +31,7 @@ const CONSENT_LABEL: Record<string, string> = {
 
 export default function PatientPage() {
   const { id } = useParams<{ id: string }>();
-  const { can, refreshCounts } = useStaff();
+  const { can, refreshCounts, me } = useStaff();
   const toast = useToast();
   const { data, error, loading, reload } = useApi<Detail>(`/v1/patients/${id}`);
   const timeline = useApi<{ events: TimelineEvent[] }>(`/v1/patients/${id}/timeline`);
@@ -91,6 +92,7 @@ export default function PatientPage() {
         </>}
       />
 
+      {["ADMIN","DOCTOR","NURSE"].includes(me.user.role)?<HealthReadings lang="en" staff endpoint={`/v1/priorities/${id}/health-readings`} />:null}
       <div className="cols-2">
         <div className="stack-l">
           <section className="panel">
@@ -255,7 +257,7 @@ export default function PatientPage() {
         <input type="text" readOnly value={link ?? ""} onFocus={(e) => e.currentTarget.select()} aria-label="Patient link" />
         <div className="row">
           <button className="btn btn--quiet btn--small" onClick={() => link && navigator.clipboard?.writeText(link).then(() => toast("Link copied.")).catch(() => toast("Copy failed. Select the link above and press Ctrl+C.", true))}>Copy link</button>
-          {link ? <a className="btn btn--quiet btn--small" href={link.replace(/^https?:\/\/[^/]+/, "")} target="_blank" rel="noreferrer">Open as the patient (demo)</a> : null}
+      {link ? <a className="btn btn--quiet btn--small" href={link.replace(/^https?:\/\/[^/]+/, "")} target="_blank" rel="noreferrer">Open as the patient (demo)</a> : null}
         </div>
       </Modal>
     </>

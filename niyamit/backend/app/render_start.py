@@ -46,6 +46,8 @@ def prepare() -> None:
         from app.seed import seed
 
         seed()  # synthetic fixtures; no --force and no private access links printed
+    from app.demo_showcase import ensure_showcase
+    ensure_showcase()  # additive, idempotent fixtures for the fixed synthetic account only
     logging.getLogger(__name__).info("Render demo database ready")
 
 

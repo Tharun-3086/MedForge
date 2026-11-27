@@ -6,6 +6,7 @@ import uuid
 from datetime import date, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import storage
@@ -34,7 +35,8 @@ from app.services.tasks import create_task
 
 
 def upload(db: Session, clinic: Clinic, patient: Patient | None, data: bytes, filename: str, source_type: str, *,
-           staff: Staff | None = None, by_patient: bool = False) -> tuple[SourceArtifact, ExtractionProposal]:
+           staff: Staff | None = None, by_patient: bool = False, document_style: str = "auto",
+           document_language: str = "en") -> tuple[SourceArtifact, ExtractionProposal]:
     vf = storage.validate_document(data, filename)
     art_id = uuid.uuid4()
     key = storage.store(clinic.id, art_id, vf.data)
@@ -42,7 +44,8 @@ def upload(db: Session, clinic: Clinic, patient: Patient | None, data: bytes, fi
         id=art_id, clinic_id=clinic.id, patient_id=patient.id if patient else None,
         uploaded_by_user_id=staff.user_id if staff else None, uploaded_by_patient=by_patient,
         source_type=SourceType(source_type), filename=vf.filename, mime_type=vf.mime, size_bytes=len(vf.data),
-        page_count=vf.page_count, sha256=vf.sha256, storage_key=key, is_synthetic=True,
+        page_count=vf.page_count, document_style=document_style, document_language=document_language,
+        sha256=vf.sha256, storage_key=key, is_synthetic=True,
         retention_until=utcnow() + timedelta(days=clinic.document_retention_days))
     db.add(artifact)
     db.flush()  # the proposal references the artifact row
@@ -86,7 +89,8 @@ def run_extraction(db: Session, proposal_id: uuid.UUID) -> None:
                                                                      ConsentPurpose.AI_PROCESSING)
     try:
         result = extract_document(data, artifact.mime_type, artifact.filename, today=clinic_today(clinic),
-                                  faults=active_faults(db), local_only=local_only)
+                                  faults=active_faults(db), local_only=local_only,
+                                  document_style=artifact.document_style, document_language=artifact.document_language)
     except ProviderError as exc:
         proposal.status, proposal.error_code = ProposalStatus.EXTRACTION_FAILED, exc.code
         proposal.provider_notes = [exc.detail or exc.code]
@@ -110,14 +114,21 @@ def run_extraction(db: Session, proposal_id: uuid.UUID) -> None:
 
 def review_field(db: Session, staff: Staff, proposal: ExtractionProposal, field: ExtractedField, *, action: str,
                  value: str | None, reason: str) -> ExtractedField:
-    if proposal.status != ProposalStatus.NEEDS_REVIEW:
+    if proposal.status not in (ProposalStatus.NEEDS_REVIEW, ProposalStatus.REVIEWED, ProposalStatus.APPROVED):
         raise HTTPException(409, "This proposal is no longer open for review.")
+    if proposal.status == ProposalStatus.APPROVED and field.name in FIELD_TO_ITEM and field.status == FieldStatus.APPROVED and action != "APPROVE":
+        raise HTTPException(409, "This date has already been approved into a plan. Change the follow-up plan separately.")
     before = {"value": field.value, "status": field.status}
     if action == "REJECT":
         field.status = FieldStatus.REJECTED
     elif action in ("APPROVE", "CORRECT"):
+        from app.ai.providers.ocr_review import VERIFICATION_REASONS
+        if action == "APPROVE" and VERIFICATION_REASONS.intersection(field.review_reasons or []) and not reason:
+            raise HTTPException(422, "Check the original and give a verification note before confirming this uncertain reading.")
         new_value = (value if action == "CORRECT" else field.value) or ""
         from app.services.health_readings import LABELS, valid_value
+        if field.name in LABELS and staff.role not in ("DOCTOR", "NURSE"):
+            raise HTTPException(403, "A doctor or nurse must confirm health readings against the original.")
         if field.name in LABELS and not valid_value(field.name,new_value):
             raise HTTPException(422,"Enter the reading with explicit units, for example 120/80 mmHg, 110 mg/dL or 6.2 %.")
         if field.name in DATE_FIELDS:
@@ -137,7 +148,37 @@ def review_field(db: Session, staff: Staff, proposal: ExtractionProposal, field:
           object_id=field.id, patient_id=proposal.patient_id,
           detail={"field": field.name, "before": before, "after": {"value": field.value, "status": field.status},
                   "reason": reason[:200]})
+    finish_report_review(db, staff, proposal)
     return field
+
+
+def finish_report_review(db: Session, staff: Staff, proposal: ExtractionProposal) -> None:
+    """A checked lab report can finish without inventing a follow-up date."""
+    resolved = bool(proposal.fields) and all(f.status in (FieldStatus.APPROVED, FieldStatus.REJECTED) for f in proposal.fields)
+    plan_pending = any(f.name in FIELD_TO_ITEM and f.status == FieldStatus.APPROVED for f in proposal.fields)
+    if resolved and not plan_pending and proposal.status == ProposalStatus.NEEDS_REVIEW:
+        proposal.status = ProposalStatus.REVIEWED
+        proposal.reviewed_by_user_id, proposal.reviewed_at = staff.user_id, utcnow()
+        audit(db, clinic_id=proposal.clinic_id, action="REPORT_REVIEW_COMPLETED", actor=staff,
+              object_type="extraction_proposal", object_id=proposal.id, patient_id=proposal.patient_id,
+              detail={"follow_up_plan_created": False})
+    elif proposal.status == ProposalStatus.REVIEWED and (not resolved or plan_pending):
+        proposal.status = ProposalStatus.NEEDS_REVIEW
+    if resolved and proposal.status in (ProposalStatus.REVIEWED, ProposalStatus.APPROVED):
+        close_document_tasks(db, staff, proposal)
+
+
+def close_document_tasks(db: Session, staff: Staff, proposal: ExtractionProposal) -> None:
+    from app.enums import OPEN_TASK_STATES, TaskStatus
+    from app.models import CareTask
+    from app.services.tasks import transition
+    rows=db.scalars(select(CareTask).where(CareTask.clinic_id==proposal.clinic_id,
+        CareTask.patient_id==proposal.patient_id,CareTask.category==TaskCategory.DOCUMENT_REVIEW,
+        CareTask.source_type=="source_artifact",CareTask.source_id==str(proposal.artifact_id),
+        CareTask.status.in_(OPEN_TASK_STATES)).with_for_update()).all()
+    for task in rows:
+        transition(db,staff,task,TaskStatus.RESOLVED,outcome="DOCUMENT_REVIEWED",
+            note="Source report review completed in Report Inbox." if proposal.status!=ProposalStatus.REJECTED else "Source report rejected in Report Inbox.")
 
 
 def approve_proposal(db: Session, staff: Staff, clinic: Clinic, proposal: ExtractionProposal,
@@ -170,6 +211,7 @@ def approve_proposal(db: Session, staff: Staff, clinic: Clinic, proposal: Extrac
     proposal.reviewed_by_user_id, proposal.reviewed_at = staff.user_id, utcnow()
     audit(db, clinic_id=clinic.id, action="PROPOSAL_APPROVED", actor=staff, object_type="extraction_proposal",
           object_id=proposal.id, patient_id=patient.id, detail={"plan_id": str(plan.id), "fields": [str(i) for i in field_ids]})
+    finish_report_review(db, staff, proposal)
     return plan
 
 
@@ -181,6 +223,7 @@ def reject_proposal(db: Session, staff: Staff, proposal: ExtractionProposal, rea
     audit(db, clinic_id=proposal.clinic_id, action="PROPOSAL_REJECTED", actor=staff,
           object_type="extraction_proposal", object_id=proposal.id, patient_id=proposal.patient_id,
           detail={"reason": reason[:200]})
+    close_document_tasks(db, staff, proposal)
 
 
 def retry(db: Session, staff: Staff, proposal: ExtractionProposal) -> None:

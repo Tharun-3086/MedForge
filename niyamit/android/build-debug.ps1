@@ -2,8 +2,8 @@ param(
  [string]$Sdk = "D:\Android\Sdk",
  [string]$Jdk = "D:\androidstd\jbr",
  [string]$AppUrl = "http://localhost:3000/",
- [ValidateRange(1,2147483647)][int]$VersionCode = 2,
- [ValidatePattern('^[0-9A-Za-z.-]+$')][string]$VersionName = "0.2-demo"
+ [ValidateRange(1,2147483647)][int]$VersionCode = 3,
+ [ValidatePattern('^[0-9A-Za-z.-]+$')][string]$VersionName = "0.3.0-demo"
 )
 $ErrorActionPreference = "Stop"
 $env:JAVA_HOME = $Jdk

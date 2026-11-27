@@ -32,6 +32,7 @@ const S: Dict = {
   document_RECEIVED: { en: "Received by the clinic", hi: "क्लिनिक को मिल गया", te: "క్లినిక్‌కు అందింది" },
   document_EXTRACTION_PENDING: { en: "Reading your document", hi: "आपका दस्तावेज़ पढ़ा जा रहा है", te: "మీ పత్రాన్ని చదువుతున్నాము" },
   document_NEEDS_REVIEW: { en: "Waiting for clinic review", hi: "क्लिनिक की समीक्षा का इंतज़ार है", te: "క్లినిక్ సమీక్ష కోసం వేచి ఉంది" },
+  document_REVIEWED: { en: "Clinic review complete", hi: "क्लिनिक की समीक्षा पूरी", te: "క్లినిక్ సమీక్ష పూర్తయింది" },
   document_EXTRACTION_FAILED: { en: "Automatic reading failed. The clinic can review the original.", hi: "अपने आप पढ़ना सफल नहीं हुआ। क्लिनिक मूल दस्तावेज़ देख सकता है।", te: "స్వయంచాలకంగా చదవడం విఫలమైంది. క్లినిక్ అసలు పత్రాన్ని చూడవచ్చు." },
   document_APPROVED: { en: "Reviewed — follow-up plan updated", hi: "समीक्षा पूरी — फ़ॉलो-अप योजना अपडेट हुई", te: "సమీక్ష పూర్తయింది — ఫాలో-అప్ ప్రణాళిక నవీకరించబడింది" },
   document_REJECTED: { en: "Not used for your care plan. Contact the clinic for details.", hi: "आपकी देखभाल योजना में शामिल नहीं किया गया। जानकारी के लिए क्लिनिक से संपर्क करें।", te: "మీ సంరక్షణ ప్రణాళికలో ఉపయోగించలేదు. వివరాల కోసం క్లినిక్‌ను సంప్రదించండి." },

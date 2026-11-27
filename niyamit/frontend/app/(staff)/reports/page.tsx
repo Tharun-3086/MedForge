@@ -10,8 +10,9 @@ import { Empty, ErrorNote, Loading, Pill, useAction } from "@/components/ui";
 import { api, usePoll, useApi } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import type { PatientBrief, Proposal } from "@/lib/types";
+import { DocumentOcrOptions } from "@/components/document-ocr-options";
 
-type Filter = "open" | "APPROVED" | "REJECTED" | "all";
+type Filter = "open" | "REVIEWED" | "APPROVED" | "REJECTED" | "all";
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -21,6 +22,8 @@ export default function ReportsPage() {
   const { busy, run } = useAction();
   const [patientId, setPatientId] = useState("");
   const [sourceType, setSourceType] = useState("PRESCRIPTION");
+  const [documentStyle,setDocumentStyle] = useState("auto");
+  const [documentLanguage,setDocumentLanguage] = useState("en");
   const [file, setFile] = useState<File | null>(null);
   const reading = (data?.proposals ?? []).some((p) => p.status === "EXTRACTION_PENDING");
   usePoll(reading, reload, 2000);
@@ -32,6 +35,8 @@ export default function ReportsPage() {
     form.set("file", file);
     form.set("patient_id", patientId);
     form.set("source_type", sourceType);
+    form.set("document_style",documentStyle);
+    form.set("document_language",documentLanguage);
     const created = await run(() => api<Proposal>("/v1/intake-artifacts", { form }), "Uploaded. The document is being read.");
     if (created) router.push(`/reports/${created.id}`);
   }
@@ -66,12 +71,13 @@ export default function ReportsPage() {
             <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
             <small>PDF (up to 10 pages), image, XLSX or CSV, at most 10 MB. Use synthetic documents only.</small>
           </label>
+          <DocumentOcrOptions style={documentStyle} language={documentLanguage} onStyle={setDocumentStyle} onLanguage={setDocumentLanguage} disabled={busy}/>
           <button className="btn" type="submit" disabled={busy || !file || !patientId}>{busy ? "Uploading…" : "Upload and read"}</button>
         </div>
       </form>
 
       <div className="filters" role="group" aria-label="Which documents">
-        {([["open", "To review"], ["APPROVED", "Approved"], ["REJECTED", "Rejected"], ["all", "All"]] as [Filter, string][]).map(([k, label]) => (
+        {([["open", "To review"], ["REVIEWED", "Reviewed reports"], ["APPROVED", "Plans approved"], ["REJECTED", "Rejected"], ["all", "All"]] as [Filter, string][]).map(([k, label]) => (
           <button key={k} className="filter" aria-pressed={filter === k} onClick={() => setFilter(k)}>{label}</button>
         ))}
       </div>

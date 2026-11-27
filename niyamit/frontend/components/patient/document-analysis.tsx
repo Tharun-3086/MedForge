@@ -3,7 +3,7 @@ import { useApi, usePoll } from "@/lib/api";
 import { t, type Lang } from "@/lib/i18n";
 import { fmtDateTime } from "@/lib/format";
 type Document = {id:string;filename:string;uploaded_at:string;status:string;automatic_text:string;
-  automatic_fields:{label:string;value:string|null;as_written:string|null;review_status:string}[];
+  automatic_fields:{label:string;value:string|null;as_written:string|null;review_status:string;review_reasons?:string[]}[];
   clinic_reviewed_fields:{label:string;value:string|null;reviewed_at:string|null}[];plan_approved:boolean};
 const copy = {
   en:{title:"Your document analysis",refresh:"Refresh analysis",original:"View original",automatic:"AI / automatic analysis — unverified",warning:"This reading can contain mistakes. Do not change medicines or treatment based on it. Your clinic checks the information separately.",scope:"The automatic reading shows document text and extracted follow-up details. It does not diagnose conditions or check medicine safety.",text:"Text read from your document",none:"No details have been extracted yet.",clinic:"Clinic-reviewed information",waiting:"Your clinic has not confirmed any fields yet.",approved:"A follow-up plan has been approved. See your care record for the plan.",rejected:"The clinic did not use this document for your plan. Contact them for details.",notconfirmed:"Not confirmed by the clinic",written:"As read",empty:"Upload a report or prescription to see its analysis here.",retry:"Could not load analysis. Try Refresh analysis."},
@@ -12,7 +12,7 @@ const copy = {
 };
 export function DocumentAnalysis({lang,onRefresh}:{lang:Lang;onRefresh?:()=>Promise<unknown>}) {
   const {data,error,reload}=useApi<{documents:Document[]}>("/v1/p/documents"); const c=copy[lang];
-  usePoll(Boolean(data?.documents.some(d=>d.status==='EXTRACTION_PENDING')),reload,3000);
+  usePoll(Boolean(data?.documents.some(d=>d.status==='EXTRACTION_PENDING'||d.status==='NEEDS_REVIEW')),()=>{void reload();void onRefresh?.().catch(()=>{});},5000);
   return <section className="card stack" aria-label={c.title}>
     <h2>{c.title}</h2><button className="btn btn--quiet btn--small" onClick={()=>{void reload(); void onRefresh?.().catch(()=>{});}}>{c.refresh}</button>
     {error?<p role="alert">{c.retry}</p>:!data?<p>{t(lang,"loading")}</p>:!data.documents.length?<p className="muted">{c.empty}</p>:data.documents.map((d,index)=><details key={d.id} className="document-analysis" open={index===0?true:undefined}>
@@ -20,7 +20,7 @@ export function DocumentAnalysis({lang,onRefresh}:{lang:Lang;onRefresh?:()=>Prom
       <div className="stack" style={{marginTop:16}}>
         <a className="pt-link" href={`/api/v1/p/documents/${d.id}/file`} target="_blank" rel="noreferrer">{c.original}</a>
         <section className="notice" data-testid="automatic-analysis"><h3>{c.automatic}</h3><p>{c.warning}</p><p className="small">{c.scope}</p>
-          {d.automatic_fields.length?d.automatic_fields.map((f,i)=><p key={i}><b>{f.label}</b>: {f.value??"—"}{f.as_written?<span className="small" style={{display:"block"}}>{c.written}: {f.as_written}</span>:null}{f.review_status==='REJECTED'?<span className="small" style={{display:"block"}}>{c.notconfirmed}</span>:null}</p>):<p>{c.none}</p>}
+          {d.automatic_fields.length?d.automatic_fields.map((f,i)=><p key={i}><b>{f.label}</b>: {f.value??"—"}{f.as_written?<span className="small" style={{display:"block"}}>{c.written}: {f.as_written}</span>:null}{f.review_status==='NEEDS_REVIEW'?<span className="small notice" style={{display:"block"}}>{lang==='en'?"Uncertain reading: clinic verification required":lang==='hi'?"अपुष्ट रीडिंग: क्लिनिक की जाँच आवश्यक है":"నిర్ధారించని రీడింగ్: క్లినిక్ తనిఖీ అవసరం"}</span>:null}{f.review_status==='REJECTED'?<span className="small" style={{display:"block"}}>{c.notconfirmed}</span>:null}</p>):<p>{c.none}</p>}
           {d.automatic_text?<details><summary>{c.text}</summary><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontFamily:"inherit",fontSize:14}}>{d.automatic_text}</pre></details>:null}
         </section>
         <section className="notice notice--ok" data-testid="clinic-analysis"><h3>{c.clinic}</h3>
