@@ -130,8 +130,50 @@ def run_extraction(db: Session, proposal_id: uuid.UUID) -> None:
                  source_type="extraction_proposal", source_id=proposal.id, visibility="STAFF")
 
 
+def add_missing_field(db: Session, staff: Staff, proposal: ExtractionProposal, *, name: str, label: str,
+                      value: str, quote: str, page: int, reason: str) -> ExtractedField:
+    """Human transcription from the original; never silently invent a new tracked parameter."""
+    from app.services.health_readings import LABELS, valid_value, custom_reading
+    if not staff.is_clinical:
+        raise HTTPException(403, "A doctor or nurse must check missing measurements against the original.")
+    if proposal.status not in (ProposalStatus.NEEDS_REVIEW, ProposalStatus.REVIEWED, ProposalStatus.APPROVED):
+        raise HTTPException(409, "Wait for extraction to finish; rejected reports cannot be edited.")
+    artifact = db.get(SourceArtifact, proposal.artifact_id)
+    if artifact is None or artifact.deleted_at is not None or page > artifact.page_count:
+        raise HTTPException(422, "Choose an existing page in the original document.")
+    value, quote, reason, label = value.strip(), quote.strip(), reason.strip(), label.strip()
+    if not value or not quote or len(reason) < 3:
+        raise HTTPException(422, "Copy the original result and give a verification note.")
+    if name not in LABELS and name not in ("clinical_observation", "custom_measurement"):
+        raise HTTPException(422, "Choose a supported measurement or an additional clinical observation.")
+    if name in LABELS and not valid_value(name, value):
+        raise HTTPException(422, "Enter the reading with its explicit supported unit, for example 75 mg/dL.")
+    if name == "custom_measurement" and not custom_reading(label,value):
+        raise HTTPException(422, "Name the lab test and enter its numeric result with the source unit.")
+    if name == "clinical_observation" and not label:
+        raise HTTPException(422, "Name the additional observation. It will be kept in the report, outside charts.")
+    if any(f.name == name and f.status != FieldStatus.REJECTED and
+           (name not in ("clinical_observation", "custom_measurement") or (f.evidence or {}).get("manual_label") == label)
+           for f in proposal.fields):
+        raise HTTPException(409, "This field already exists. Correct or reject its existing candidate first.")
+    field = ExtractedField(clinic_id=proposal.clinic_id, proposal=proposal,
+        position=max((f.position for f in proposal.fields), default=-1) + 1,
+        name=name, value=value, proposed_value=None, extracted_value=quote,
+        status=FieldStatus.APPROVED, confidence=None, review_reasons=[],
+        evidence={"page": page, "quote": quote, "extraction_method": "CLINICIAN_TRANSCRIPTION",
+                  "manual_label": LABELS.get(name) or label, "verification_note": reason},
+        reviewed_by_user_id=staff.user_id, reviewed_at=utcnow())
+    db.add(field)
+    db.flush()
+    audit(db, clinic_id=proposal.clinic_id, action="FIELD_ADDED_BY_CLINICIAN", actor=staff,
+          object_type="extracted_field", object_id=field.id, patient_id=proposal.patient_id,
+          detail={"field": name, "value": value, "page": page, "reason": reason})
+    finish_report_review(db, staff, proposal)
+    return field
+
+
 def review_field(db: Session, staff: Staff, proposal: ExtractionProposal, field: ExtractedField, *, action: str,
-                 value: str | None, reason: str) -> ExtractedField:
+                 value: str | None, reason: str, measurement_name: str | None = None) -> ExtractedField:
     if proposal.status not in (ProposalStatus.NEEDS_REVIEW, ProposalStatus.REVIEWED, ProposalStatus.APPROVED):
         raise HTTPException(409, "This proposal is no longer open for review.")
     if proposal.status == ProposalStatus.APPROVED and field.name in FIELD_TO_ITEM and field.status == FieldStatus.APPROVED and action != "APPROVE":
@@ -140,14 +182,29 @@ def review_field(db: Session, staff: Staff, proposal: ExtractionProposal, field:
     if action == "REJECT":
         field.status = FieldStatus.REJECTED
     elif action in ("APPROVE", "CORRECT"):
-        if field.name == 'unmapped_measurement':
-            raise HTTPException(422, "This parameter is not supported for verified tracking. Review the original; reject this candidate or record it through an approved clinical workflow.")
+        if field.name in ('unmapped_measurement','custom_measurement'):
+            from app.services.health_readings import custom_reading, LABELS
+            if not staff.is_clinical:
+                raise HTTPException(403, "A doctor or nurse must verify laboratory results.")
+            if field.name=='unmapped_measurement' and action!='CORRECT':
+                raise HTTPException(422, "Use Correct to verify the test name, numeric value and unit first.")
+            from app.ai.medical_contracts import PARAMETER_ALIASES
+            import re
+            label=(measurement_name or (field.evidence or {}).get('manual_label') or (field.evidence or {}).get('parameter') or '').strip()
+            key=PARAMETER_ALIASES.get(re.sub(r'[^a-z0-9]','',label.lower()))
+            if key:
+                field.name=key
+            else:
+                if not custom_reading(label,(value if action=='CORRECT' else field.value) or ''):
+                    raise HTTPException(422, "Enter the exact test name and numeric result with its unit.")
+                field.name='custom_measurement'
+            field.evidence={**(field.evidence or {}),'manual_label':LABELS.get(key,label),'parameter_verified_by_clinician':True}
         from app.ai.providers.ocr_review import VERIFICATION_REASONS
         if action == "APPROVE" and VERIFICATION_REASONS.intersection(field.review_reasons or []) and not reason:
             raise HTTPException(422, "Check the original and give a verification note before confirming this uncertain reading.")
         new_value = (value if action == "CORRECT" else field.value) or ""
         from app.services.health_readings import LABELS, valid_value
-        if field.name in LABELS and staff.role not in ("DOCTOR", "NURSE"):
+        if (field.name in LABELS or field.name in ("clinical_observation", "custom_measurement")) and staff.role not in ("DOCTOR", "NURSE"):
             raise HTTPException(403, "A doctor or nurse must confirm health readings against the original.")
         if field.name in LABELS and not valid_value(field.name,new_value):
             raise HTTPException(422,"Enter the reading with explicit units, for example 120/80 mmHg, 110 mg/dL or 6.2 %.")

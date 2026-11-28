@@ -338,7 +338,7 @@ def extract_document(data: bytes, mime: str, filename: str, *, today: date,
     from app.ai.medical_validation import validate_measurements, reconcile_measurements
     from app.services.health_readings import LABELS
     if any(c.parameter not in LABELS for c in medical_candidates):
-        notes.append("Some extracted parameters are outside the supported measurement catalogue; review the original for those results.")
+        notes.append("Additional laboratory tests were proposed. A clinician must verify their names, values and units before adding them to health numbers.")
     fields.extend(reconcile_measurements(measurement_fields(blocks),
         validate_measurements(medical_candidates,blocks,today,extractor)))
     return DocResult(blocks, pages, fields, ocr, extractor, model_version, notes)
@@ -474,7 +474,7 @@ def measurement_fields(blocks):
     """Build source-linked, unapproved readings; shared with local repair tooling."""
     from app.services.health_readings import candidates as reading_candidates
     from app.ai.providers.ocr_review import evidence_for
-    from app.services.health_readings import valid_value
+    from app.services.health_readings import valid_value, LABELS
     fields = []
     readings = reading_candidates(blocks)
     for name, rows in readings.items():
@@ -490,4 +490,23 @@ def measurement_fields(blocks):
             from app.ai.providers.ocr_review import VERIFICATION_REASONS
             fields.append(FieldProposal(name, value, quote, "NEEDS_REVIEW" if VERIFICATION_REASONS.intersection(reasons) else "UNVERIFIED",
                                         confidence, evidence, sorted(set(reasons))))
+    # Preserve additional named laboratory rows on the printed fast path too.
+    # Never infer a unit, consume reference-only lines, or treat medication
+    # doses (mg/ml/tablets) as laboratory results.
+    import re
+    from app.ai.medical_contracts import MedicalMeasurement
+    from app.ai.medical_validation import validate_measurements
+    additional=[]
+    for block in blocks:
+        for line in str(block.get('text','')).splitlines():
+            match=re.match(r'^\s*([A-Za-z][A-Za-z .+()/\-]{2,80}?)\s*[:|]?\s+([<>]=?\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?)\s*([mnpµμu]g\s*/\s*(?:d[lL]|m[lL])|mmol\s*/\s*[lL](?:it)?|mEq\s*/\s*[lL]|g\s*/\s*d[lL]|[uUµμ]mol\s*/\s*[lL]|[iI]?[uU]\s*/\s*[lL])\b',line)
+            if not match:continue
+            label,value,unit=match.groups()
+            if re.search(r'\b(reference|range|normal|target|dose|tablet|medicine|medication)\b',label,re.I):continue
+            if re.fullmatch(r'(?:(?:fasting|random|post[ -]?(?:meal|prandial))\s+)?(?:blood|plasma|serum|electrolytes)',label.strip(),re.I):continue
+            candidate=MedicalMeasurement(parameter=label.strip(),value=value,unit=unit,quote=line,block_ids=[block['id']])
+            if candidate.parameter in LABELS:continue
+            additional.append(candidate)
+    if additional:
+        fields.extend(validate_measurements(additional,blocks,date.today(),'printed-row-candidate'))
     return fields

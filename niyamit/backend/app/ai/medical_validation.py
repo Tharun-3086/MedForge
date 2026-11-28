@@ -3,7 +3,7 @@ import re
 from app.ai.medical_contracts import MEDICAL_SCHEMA_VERSION, MedicalMeasurement
 from app.ai.dates import parse_explicit_date
 from app.ai.providers.ocr_review import evidence_for
-from app.services.health_readings import LABELS, UNITS, valid_value
+from app.services.health_readings import LABELS, UNITS, valid_value, custom_reading
 
 
 def _text(value):
@@ -35,7 +35,7 @@ def validate_measurements(candidates, blocks, today, provider):
         unit=UNITS.get(unit_key,candidate.unit.strip())
         if unit_key=='mmhg':unit='mmHg'
         value=candidate.value.strip()+' '+unit
-        if not valid_value(candidate.parameter,value):
+        if not (custom_reading(candidate.parameter,value) if unsupported else valid_value(candidate.parameter,value)):
             reasons.append('UNSUPPORTED_MEASUREMENT_UNIT')
         # A number occurring somewhere on a page is insufficient. It must be
         # attached to its unit in the quoted result, not picked from a range.
@@ -69,8 +69,10 @@ def validate_measurements(candidates, blocks, today, provider):
 def reconcile_measurements(local, model):
     """Keep disagreements as separate candidates; agreement is never approval."""
     result=list(local)
+    def identity(f):
+        return (f.name,_text(f.evidence.get('parameter','')) if f.name=='unmapped_measurement' else '')
     for proposed in model:
-        same=next((f for f in result if f.name==proposed.name and f.value==proposed.value),None)
+        same=next((f for f in result if identity(f)==identity(proposed) and f.value==proposed.value),None)
         if same:
             sources=list(same.evidence.get('extraction_sources',[]))
             sources.append(proposed.evidence)
@@ -78,8 +80,8 @@ def reconcile_measurements(local, model):
             same.review_reasons=sorted(set(same.review_reasons)|set(proposed.review_reasons))
             same.status='NEEDS_REVIEW'
         else:result.append(proposed)
-    for name in {f.name for f in result}:
-        group=[f for f in result if f.name==name]
+    for name in {identity(f) for f in result}:
+        group=[f for f in result if identity(f)==name]
         if len({f.value for f in group})>1:
             for f in group:
                 f.status='NEEDS_REVIEW'

@@ -94,7 +94,8 @@ from app.services.health_readings import LABELS as HEALTH_LABELS
 
 FIELD_LABELS = {
     **HEALTH_LABELS,
-    "unmapped_measurement":"Unsupported measurement — manual review",
+    "unmapped_measurement":"Additional lab result — verify test name and unit",
+    "custom_measurement":"Additional laboratory result",
     "blood_pressure":"Blood pressure", "fasting_glucose":"Fasting glucose", "postmeal_glucose":"Post-meal glucose",
     "random_glucose":"Random glucose", "blood_glucose":"Glucose (type unspecified)", "hba1c":"HbA1c",
     "document_type": "Document type",
@@ -169,5 +170,5 @@ def sarvam_extract_schema() -> dict[str, Any]:
     measurement_schema = copy.deepcopy(MEASUREMENT_JSON_SCHEMA)
     measurement_schema["properties"]["confidence"]["type"] = "number"
     props["measurements"] = {"type":"array", "items": measurement_schema,
-        "description":"Extract diabetes-related measured results, not reference limits, due dates or medicine doses. Keep exact source evidence. Empty array if absent."}
+        "description":"Extract measured laboratory results including additional named tests, not reference limits, due dates or medicine doses. Keep exact source evidence. Empty array if absent."}
     return {"type": "object", "properties": props}

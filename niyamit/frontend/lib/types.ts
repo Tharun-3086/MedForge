@@ -51,6 +51,10 @@ export interface Plan {
 export interface TaskEvent { from: string | null; to: string; by: string; note: string; at: string }
 
 export interface Task {
+  can_reply?: boolean;
+  appointment_options?: {id:string;reference:string;starts_at:string;date:string;label:string;provider:string}[];
+  patient_language?: string | null;
+  clinician_replies?: { id: string; text: string; from: string; at: string }[];
   id: string;
   patient_id: string;
   category: string;
@@ -202,6 +206,8 @@ export interface Field {
     test_date?: string | null;
     extraction_provider?: string;
     extraction_schema?: string;
+    parameter?: string;
+    manual_label?: string;
     engines?: string[];
     alternatives?: {text:string;engine:string;model?:string}[];
   };
@@ -225,6 +231,7 @@ export interface Artifact {
 }
 
 export interface Proposal {
+  measurement_options?: { name: string; label: string }[];
   id: string;
   status: string;
   created_at: string;

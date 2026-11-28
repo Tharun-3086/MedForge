@@ -60,7 +60,7 @@ def comparisons(history):
         if len(usable)<2:continue
         older,newer=usable[-2],usable[-1]
         delta=newer[1]-older[1]
-        output.append({'parameter':key,'label':LABELS[key],'unit':unit,'direction':'increased' if delta>0 else 'decreased' if delta<0 else 'unchanged',
+        output.append({'parameter':key,'label':LABELS.get(key,newer[0].get('label',key)),'unit':unit,'direction':'increased' if delta>0 else 'decreased' if delta<0 else 'unchanged',
             'change':str(delta),'previous':older[0],'current':newer[0],
             'interpretation':'Numerical change only; whether this is clinically improving or worsening needs your clinician’s assessment.'})
     return output

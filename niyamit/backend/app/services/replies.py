@@ -72,7 +72,8 @@ INTENT_LABEL = {
 
 def ingest(db: Session, clinic: Clinic, patient: Patient, *, channel: str, mode: str, idempotency_key: str,
            text: str | None = None, audio: tuple[bytes, str] | None = None,
-           provider_event_id: uuid.UUID | None = None, caregiver_grant_id: uuid.UUID | None = None
+           provider_event_id: uuid.UUID | None = None, caregiver_grant_id: uuid.UUID | None = None,
+           clinical_question: bool = False
            ) -> tuple[PatientReply, bool]:
     """Store the inbound reply first (fast), process later. Same idempotency key -> same reply."""
     existing = db.scalar(select(PatientReply).where(PatientReply.idempotency_key == idempotency_key))
@@ -83,7 +84,8 @@ def ingest(db: Session, clinic: Clinic, patient: Patient, *, channel: str, mode:
     reply = PatientReply(clinic_id=clinic.id, patient_id=patient.id, channel=channel, input_mode=mode,
                          idempotency_key=idempotency_key, provider_event_id=provider_event_id,
                          caregiver_grant_id=caregiver_grant_id, text=(text or "").strip()[:2000] or None,
-                         status=ReplyStatus.RECEIVED)
+                         status=ReplyStatus.RECEIVED,
+                         understanding={"explicit_clinical_question": True} if clinical_question else {})
     if audio is not None:
         data, filename = audio
         vf = storage.validate_audio(data, filename)
@@ -96,7 +98,7 @@ def ingest(db: Session, clinic: Clinic, patient: Patient, *, channel: str, mode:
         reply.audio_artifact_id = art_id
     db.add(reply)
     db.flush()
-    if mode == InputMode.BUTTON and channel == Channel.PATIENT_APP:
+    if (mode == InputMode.BUTTON or clinical_question) and channel == Channel.PATIENT_APP:
         # A tapped button needs no AI, so it is answered at once; the worker remains the fallback.
         try:
             with db.begin_nested():
@@ -151,13 +153,24 @@ def process_reply(db: Session, reply_id: uuid.UUID) -> None:
         reply.language_confidence, reply.asr_provider = tr.language_probability, f"{tr.provider}:{tr.model}"
         text = tr.text
 
-    choice = explicit_choice(text) if reply.input_mode in (InputMode.BUTTON, InputMode.TEXT) else None
+    asked_clinician = bool((reply.understanding or {}).get("explicit_clinical_question"))
+    choice = explicit_choice(text) if not asked_clinician and reply.input_mode in (InputMode.BUTTON, InputMode.TEXT) else None
     if choice and choice[0] == "START":
         patients.opt_in(db, patient, method="MESSAGE" if reply.channel != Channel.PATIENT_APP else "PATIENT_APP")
         reply.understanding = {"intents": ["OPT_IN"], "confidence": 1.0}
         reply.understanding_source, reply.status, reply.processed_at = "BUTTON", ReplyStatus.ACTION_SUCCEEDED, utcnow()
         return
-    if choice:
+    if asked_clinician:
+        from app.ai.rules import classify
+        u = classify(text)
+        u.intents = [i for i in u.intents if i != Intent.OTHER_OR_UNCLEAR]
+        if Intent.URGENT_CONCERN not in u.intents and Intent.CLINICAL_QUESTION not in u.intents:
+            u.intents.insert(0, Intent.CLINICAL_QUESTION)
+        u.confidence = 1.0
+        u.clinical_question_present = Intent.CLINICAL_QUESTION in u.intents
+        u.urgent_concern_present = Intent.URGENT_CONCERN in u.intents
+        source, notes = "PATIENT_REQUEST", ["Patient explicitly asked for clinical review; no diagnosis generated."]
+    elif choice:
         intent, barrier = choice
         u = ReplyUnderstanding(intents=[intent], barrier_category=barrier, confidence=1.0, source_text=text,
                                opt_out_present=intent == Intent.OPT_OUT)

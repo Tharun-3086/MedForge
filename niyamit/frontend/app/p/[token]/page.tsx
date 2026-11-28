@@ -7,7 +7,9 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ReplyResult, type ReplyView } from "@/components/patient/reply-result";
 import { VoiceRecorder } from "@/components/patient/voice";
 import { CareActions, CareNavigation, type CareDestination } from "@/components/patient/care-navigation";
+import { BookedAppointments, type AppointmentRequestStatus, type AppointmentUpdate } from "@/components/patient/booked-appointments";
 import { HealthReadings } from "@/components/patient/health-readings";
+import { ClinicConversation, type ClinicConversationData } from "@/components/patient/clinic-conversation";
 import { DocumentAnalysis } from "@/components/patient/document-analysis";
 import { BarrierPicker, FamilyView, PassportView, ReportUpload } from "@/components/patient/views";
 import { BrandMark } from "@/components/ui";
@@ -16,12 +18,14 @@ import { fmtDate, fmtLongDay, fmtTime, leafParts } from "@/lib/format";
 import { asLang, dueText, LANGS, t, tItemKind, type Lang } from "@/lib/i18n";
 import type { Item } from "@/lib/types";
 
-type Home = {
+type Home = ClinicConversationData & {
+  appointment_requests?:AppointmentRequestStatus[];
+  appointment_updates?:AppointmentUpdate[];
   demo_session?: boolean;
   patient: { first_name: string; language: string; opted_out: boolean };
   clinic: { name: string; short_name: string; phone: string };
   items: Item[];
-  appointments: { id: string; reference: string; starts_at: string; date: string; item_id: string | null; label: string; with: string }[];
+  appointments: { id: string; reference: string; starts_at: string; date: string; item_id: string | null; label: string; with: string; patient_response?: string | null }[];
   pending: ReplyView | null;
   consents: Record<string, string>;
   voice_available: boolean;
@@ -44,14 +48,16 @@ export default function PatientApp() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [focusMessage, setFocusMessage] = useState(false);
+  const [clinicMessagesOpen, setClinicMessagesOpen] = useState(false);
   function navigateCare(destination: CareDestination) {
     setView(destination === "message" ? "home" : destination);
     setFocusMessage(destination === "message");
+    if (destination === "message") setClinicMessagesOpen(true);
     if (destination !== "message") window.scrollTo({ top: 0, behavior: "instant" });
   }
   useEffect(() => {
     if (!focusMessage || view !== "home") return;
-    const field = document.getElementById("patient-message");
+    const field = document.getElementById("clinic-question");
     field?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
     field?.focus({ preventScroll: true });
     setFocusMessage(false);
@@ -200,9 +206,12 @@ export default function PatientApp() {
           <>
             <h1>{t(lang, "hello", { name: home.patient.first_name })}</h1>
             <button className="pt-link" onClick={async () => { await api("/v1/p/logout", {method:"POST"}); router.replace("/patient"); }}>{lang === "hi" ? "साइन आउट" : lang === "te" ? "సైన్ అవుట్" : "Sign out"}</button>
+            {home.clinician_replies?.length ? <a href="#clinic-conversation" onClick={() => setClinicMessagesOpen(true)} className="notice notice--ok">{lang === "hi" ? "क्लिनिक के जवाब देखें" : lang === "te" ? "క్లినిక్ సమాధానాలను చూడండి" : "View replies from your clinical team"}</a> : null}
+            <BookedAppointments appointments={home.appointments} requests={home.appointment_requests} updates={home.appointment_updates} lang={lang} onChanged={loadHome} />
             <HealthReadings lang={lang} onUpload={() => navigateCare("report")} />
             <CareActions lang={lang} onSelect={navigateCare} />
-            <DocumentAnalysis lang={lang} onRefresh={loadHome} />
+            <details id="clinic-message-panel" className="card patient-section" open={clinicMessagesOpen} onToggle={e => setClinicMessagesOpen(e.currentTarget.open)}><summary>{lang === "hi" ? "क्लिनिक से सवाल और जवाब" : lang === "te" ? "క్లినిక్ ప్రశ్నలు & సమాధానాలు" : "Ask your clinic · questions & replies"}</summary><ClinicConversation data={home} lang={lang} onChanged={loadHome} /></details>
+            <details className="card patient-section"><summary>{lang === "hi" ? "रिपोर्ट विश्लेषण" : lang === "te" ? "నివేదిక విశ్లేషణ" : "Report analysis & clinic verification"}</summary><DocumentAnalysis lang={lang} onRefresh={loadHome} /></details>
             {home.patient.opted_out ? (
               <div className="notice">{t(lang, "remindersOff")} <button className="pt-link" onClick={() => choose("START")}>{t(lang, "startReminders")}</button></div>
             ) : null}
@@ -228,16 +237,7 @@ export default function PatientApp() {
                   <p className="small muted">{t(lang, "alsoDue")}: {later.map((i) => `${tItemKind(lang, i.kind)} (${when(i)}, ${dueText(lang, i, home.today).toLowerCase()})`).join("; ")}</p>
                 ) : null}
               </section>
-            ) : <p className="card">{t(lang, "noFollowUp")}</p>}
-
-            {home.appointments.length ? (
-              <section className="card">
-                <h2>{t(lang, "appointments")}</h2>
-                {home.appointments.map((a) => (
-                  <p key={a.id}><b>{fmtDate(a.starts_at, lang)}</b>, {a.label.split(", ").slice(-1)[0]}<span className="small muted" style={{ display: "block" }}>{t(lang, "ref", { ref: a.reference })}</span></p>
-                ))}
-              </section>
-            ) : null}
+            ) : home.appointments.length ? null : <p className="card">{t(lang, "noFollowUp")}</p>}
 
             {home.pending ? (
               <ReplyResult lang={lang} reply={home.pending} tts={home.tts_available} clinicPhone={home.clinic.phone}
@@ -257,8 +257,9 @@ export default function PatientApp() {
               </div>
             )}
 
-            <section className="card">
-              <h2>{t(lang, "ownWords")}</h2>
+            <details className="card patient-section">
+              <summary>{lang === "hi" ? "अपॉइंटमेंट या रिमाइंडर का संदेश" : lang === "te" ? "అపాయింట్‌మెంట్ లేదా రిమైండర్ సందేశం" : "Appointment or reminder message"}</summary>
+              <p className="small muted">{lang === "hi" ? "समय बदलने या आने में समस्या के लिए। स्वास्थ्य संबंधी सवाल ऊपर क्लिनिक से पूछें।" : lang === "te" ? "సమయం మార్చడానికి లేదా రావడంలో సమస్య కోసం. ఆరోగ్య ప్రశ్నలకు పైన క్లినిక్‌ను అడగండి." : "For timing, attendance or reminder replies. Use Ask your clinic above for health questions."}</p>
               <form className="stack" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void send("/v1/p/replies", { text }); }}>
                 <textarea id="patient-message" aria-label={t(lang, "typeHere")} placeholder={t(lang, "typeHere")} value={text} onChange={(e) => setText(e.target.value)} />
                 <button className="btn" type="submit" disabled={busy || !text.trim()}>{t(lang, "send")}</button>
@@ -266,7 +267,7 @@ export default function PatientApp() {
               <VoiceRecorder lang={lang} available={home.voice_available} consented={home.consents.AI_PROCESSING === "GRANTED"}
                 onConsent={async () => { await api("/v1/p/consents", { body: { purpose: "AI_PROCESSING", granted: true } }); await loadHome(); }}
                 onSent={(r) => { setReply(r); setView("result"); }} />
-            </section>
+            </details>
 
             <div className="pt-foot">
               <button className="pt-link" onClick={() => setView("report")}>{t(lang, "shareReport")}</button>

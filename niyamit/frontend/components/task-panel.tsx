@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { ClinicalReplyComposer } from "@/components/clinical-reply-composer";
+import { AppointmentTaskActions } from "@/components/appointment-task-actions";
 import { useEffect, useState } from "react";
 
 import { ACTION_STATUS_LABELS, BARRIER_LABELS, CATEGORY_LABELS, INTENT_LABELS, OUTCOME_LABELS } from "@/components/outcomes";
@@ -92,6 +94,10 @@ export function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onCl
             </dl>
 
             <SourceDetails task={task} />
+            {clinical ? <p className="small">Patient language: {task.patient_language === "te" ? "Telugu" : task.patient_language === "hi" ? "Hindi" : task.patient_language === "en" ? "English" : "Ask the patient"}</p> : null}
+            {task.clinician_replies?.map(reply => <div className="notice notice--ok" key={reply.id}><b>{reply.from}</b><span className="small"> · {fmtDateTime(reply.at)}</span><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{reply.text}</p><span className="small">Saved in the patient app</span></div>)}
+            {task.can_reply && isOpen ? <ClinicalReplyComposer taskId={taskId} showAssistant={clinical} onSent={() => { void reload(); onChanged(); }} /> : null}
+            {task.can_reply && isOpen && ["RESCHEDULE","BARRIER","CALLBACK","BOOKING_FAILED"].includes(task.category) ? <AppointmentTaskActions task={task} onChanged={()=>{void reload();onChanged();}}/>:null}
 
             {isOpen ? (
               <div className="stack">

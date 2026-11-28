@@ -22,7 +22,7 @@ from app.audit import audit
 from app.config import settings
 from app.db import get_db, utcnow
 from app.enums import ActorType, CaregiverScope, ConsentPurpose, ConsentStatus, InputMode, ReplyStatus
-from app.models import Appointment, AppointmentRequest, AvailabilitySlot, CaregiverGrant, Clinic, Patient, PatientReply, SourceArtifact, ExtractionProposal
+from app.models import Appointment, AppointmentRequest, AvailabilitySlot, CaregiverGrant, Clinic, Patient, PatientReply, SourceArtifact, ExtractionProposal, TimelineEvent, CareTask
 from app.routers.intake import read_limited
 from app.security import (
     CAREGIVER_COOKIE,
@@ -91,11 +91,16 @@ def _upcoming_appointments(db: Session, clinic: Clinic, patient_id) -> list[dict
     tz = clinic_tz(clinic)
     return [{"id": str(a.id), "reference": a.booking_reference, "starts_at": s.starts_at.isoformat(),
              "date": s.starts_at.astimezone(tz).date().isoformat(), "item_id": str(a.item_id) if a.item_id else None,
-             "label": slot_label(s.starts_at.astimezone(tz)), "with": s.provider_label}
+             "label": slot_label(s.starts_at.astimezone(tz)), "with": s.provider_label,
+             "patient_response": db.scalar(select(TimelineEvent.summary).where(
+                 TimelineEvent.patient_id == patient_id, TimelineEvent.clinic_id == clinic.id,
+                 TimelineEvent.event_type == "APPOINTMENT_RESPONSE", TimelineEvent.source_id == str(a.id))
+                 .order_by(TimelineEvent.occurred_at.desc()).limit(1))}
             for a, s in rows]
 
 
 def home_payload(db: Session, patient: Patient, clinic: Clinic) -> dict:
+    from app.services.appointment_tasks import patient_requests
     today = clinic_today(clinic)
     pending = db.scalar(select(PatientReply).where(
         PatientReply.patient_id == patient.id, PatientReply.caregiver_grant_id.is_(None),
@@ -108,6 +113,22 @@ def home_payload(db: Session, patient: Patient, clinic: Clinic) -> dict:
         "clinic": {"name": clinic.name, "short_name": clinic.short_name, "phone": clinic.phone},
         "items": [S.item_dict(i, today) for i in active_items(db, patient.id)],
         "appointments": _upcoming_appointments(db, clinic, patient.id),
+        "appointment_requests": patient_requests(db,patient),
+        "appointment_updates": [{"id":str(e.id),"text":e.summary,"from":e.actor_label,"at":S.iso(e.occurred_at)}
+            for e in db.scalars(select(TimelineEvent).where(TimelineEvent.clinic_id==clinic.id,
+                TimelineEvent.patient_id==patient.id,TimelineEvent.event_type=="APPOINTMENT_CHANGED",
+                TimelineEvent.visibility=="PATIENT_AND_STAFF").order_by(TimelineEvent.occurred_at.desc()).limit(5))],
+        "clinical_questions": [{"id": str(task.id), "question": task.patient_statement,
+            "status": task.status, "urgent": task.category == "URGENT_CONCERN"}
+            for task in db.scalars(select(CareTask).where(CareTask.patient_id == patient.id,
+                CareTask.clinic_id == clinic.id, CareTask.category.in_(["CLINICAL_QUESTION", "URGENT_CONCERN"]))
+                .order_by(CareTask.created_at.desc()).limit(10)).all()],
+        "clinician_replies": [{"id": str(event.id), "text": event.summary, "from": event.actor_label,
+            "question": event.patient_words, "at": S.iso(event.occurred_at)}
+            for event in db.scalars(select(TimelineEvent).where(TimelineEvent.patient_id == patient.id,
+                TimelineEvent.clinic_id == clinic.id, TimelineEvent.event_type == "CLINICIAN_REPLY",
+                TimelineEvent.visibility == "PATIENT_AND_STAFF")
+                .order_by(TimelineEvent.occurred_at.desc()).limit(20)).all()],
         "pending": reply_view(pending) if pending else None,
         "consents": patients.consent_state(db, patient.id),
         "voice_available": pipeline.get_asr() is not None,
@@ -253,6 +274,56 @@ def home(me: PatientPrincipal = Depends(current_patient), db: Session = Depends(
     return {**home_payload(db, patient, clinic), "demo_session": me.demo}
 
 
+class AttendanceIn(BaseModel):
+    choice: Literal["CONFIRM", "CANNOT_ATTEND", "RESCHEDULE", "CALLBACK"]
+    reason: str = Field(default="", max_length=40)
+
+
+@router.post("/appointments/{appointment_id}/response")
+def appointment_response(appointment_id: uuid.UUID, body: AttendanceIn,
+                         me: PatientPrincipal = Depends(current_patient), db: Session = Depends(get_db)) -> dict:
+    from app.audit import timeline
+    from app.enums import Provenance, TaskCategory, TaskQueue
+    from app.services.tasks import create_task, BARRIER_ROUTING
+    rate_limit(f"preply:{me.patient_id}", 20, 60)
+    patient, clinic = _ctx(db, me)
+    appointment = db.scalar(select(Appointment).where(Appointment.id == appointment_id,
+        Appointment.patient_id == patient.id, Appointment.clinic_id == clinic.id).with_for_update())
+    if appointment is None:
+        raise HTTPException(404, "Appointment not found.")
+    slot = db.get(AvailabilitySlot, appointment.slot_id)
+    if appointment.status != "CONFIRMED" or slot is None or slot.starts_at <= utcnow():
+        raise HTTPException(409, "This appointment is no longer open for a response.")
+    labels = {"CONFIRM": "Patient confirmed attendance", "CANNOT_ATTEND": "Patient cannot attend",
+              "RESCHEDULE": "Patient requested a different time", "CALLBACK": "Patient requested a call"}
+    queue, barrier = TaskQueue.RECEPTION, None
+    if body.choice == "CANNOT_ATTEND":
+        if body.reason not in BARRIER_ROUTING:
+            raise HTTPException(422, "Choose the reason you cannot attend.")
+        barrier = body.reason
+        queue = BARRIER_ROUTING[body.reason][0]
+    summary = f"{labels[body.choice]} — {appointment.booking_reference}" + (f" · {body.reason}" if barrier else "")
+    latest = db.scalar(select(TimelineEvent).where(TimelineEvent.clinic_id == clinic.id,
+        TimelineEvent.patient_id == patient.id, TimelineEvent.event_type == "APPOINTMENT_RESPONSE",
+        TimelineEvent.source_id == str(appointment.id)).order_by(TimelineEvent.occurred_at.desc()).limit(1))
+    if not latest or latest.summary != summary:
+        timeline(db, clinic_id=clinic.id, patient_id=patient.id, event_type="APPOINTMENT_RESPONSE",
+            summary=summary, provenance=Provenance.PATIENT_REPORTED, actor_type=ActorType.PATIENT,
+            actor_label="Patient", source_type="appointment", source_id=appointment.id)
+        if body.choice != "CONFIRM":
+            category = {"CANNOT_ATTEND": TaskCategory.BARRIER, "RESCHEDULE": TaskCategory.RESCHEDULE,
+                        "CALLBACK": TaskCategory.CALLBACK}[body.choice]
+            create_task(db, clinic=clinic, patient=patient, category=category, queue=queue,
+                title=summary, statement=summary, barrier=barrier,
+                dedupe_key=f"appointment-response:{appointment.id}:{body.choice}",
+                source_type="appointment", source_id=appointment.id)
+        audit(db, clinic_id=clinic.id, action="APPOINTMENT_PATIENT_RESPONSE", actor_type=ActorType.PATIENT, actor_id=str(patient.id),
+            object_type="appointment", object_id=appointment.id, patient_id=patient.id,
+            detail={"choice": body.choice, "reason": body.reason})
+    db.commit()
+    return {"response": summary, "appointment_kept": True}
+
+
 class ProfileIn(BaseModel):
     preferred_language: Literal["en", "hi", "te"]
 
@@ -305,6 +376,15 @@ def send_text(body: TextIn, me: PatientPrincipal = Depends(current_patient), db:
     patient, clinic = _ctx(db, me)
     reply, _ = replies.ingest(db, clinic, patient, channel="PATIENT_APP", mode=InputMode.TEXT,
                               idempotency_key=_key(patient.id, body.client_key), text=body.text)
+    return _ingest_and_view(db, reply)
+
+
+@router.post("/questions")
+def send_question(body: TextIn, me: PatientPrincipal = Depends(current_patient), db: Session = Depends(get_db)) -> dict:
+    rate_limit(f"preply:{me.patient_id}", 20, 60)
+    patient, clinic = _ctx(db, me)
+    reply, _ = replies.ingest(db, clinic, patient, channel="PATIENT_APP", mode=InputMode.TEXT,
+        idempotency_key=_key(patient.id, body.client_key), text=body.text, clinical_question=True)
     return _ingest_and_view(db, reply)
 
 
@@ -468,12 +548,13 @@ def patient_documents(me: PatientPrincipal = Depends(current_patient), db: Sessi
         .order_by(SourceArtifact.created_at.desc()).limit(10)).all()
     return {"documents": [{"id": str(a.id), "filename": a.filename, "uploaded_at": S.iso(a.created_at),
         "status": p.status if p else "RECEIVED", "ocr_provider": p.ocr_provider if p else "",
-        "automatic_fields": [{"label": S.FIELD_LABELS.get(f.name, f.name), "value": f.proposed_value,
+        "automatic_fields": [{"label": (f.evidence or {}).get("manual_label") or S.FIELD_LABELS.get(f.name, f.name), "value": f.proposed_value,
                               "as_written": f.extracted_value, "review_status": f.status,
-                              "review_reasons": f.review_reasons} for f in p.fields] if p else [],
+                              "review_reasons": f.review_reasons} for f in p.fields
+                              if (f.evidence or {}).get("extraction_method") != "CLINICIAN_TRANSCRIPTION"] if p else [],
         "verification_required": any(f.status == "NEEDS_REVIEW" for f in p.fields) if p else False,
         "automatic_text": "\n".join(str(b.get("text", "")) for b in (p.blocks or []))[:30000] if p else "",
-        "clinic_reviewed_fields": [{"label": S.FIELD_LABELS.get(f.name, f.name), "value": f.value,
+        "clinic_reviewed_fields": [{"label": (f.evidence or {}).get("manual_label") or S.FIELD_LABELS.get(f.name, f.name), "value": f.value,
                                     "reviewed_at": S.iso(f.reviewed_at)} for f in p.fields if f.status == "APPROVED"] if p else [],
         "plan_approved": bool(p and p.status == "APPROVED" and p.plan_id)} for a, p in rows]}
 

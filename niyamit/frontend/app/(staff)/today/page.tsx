@@ -1,6 +1,7 @@
 "use client";
 
 import { PriorityQueue } from "@/components/priority-queue";
+import { ClinicalInbox } from "@/components/clinical-inbox";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -67,6 +68,7 @@ export default function TodayPage() {
           </>
         ) : null}
       />
+      {["ADMIN","DOCTOR","NURSE"].includes(me.user.role) ? <ClinicalInbox /> : null}
       {["ADMIN","DOCTOR","NURSE"].includes(me.user.role) ? <PriorityQueue /> : null}
       {counts && counts.urgent_open > 0 ? (
         <p className="notice notice--fail" style={{ marginBottom: 14 }}>

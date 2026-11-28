@@ -33,12 +33,12 @@ export function HealthReadings({lang,onUpload,endpoint="/v1/p/health-readings",s
       <details><summary>{s.details}</summary><p className="small muted">{v.filename}</p><p className="small">{v.source_text}</p><a className="pt-link" href={staff?`/reports/${v.proposal_id}`:`/api/v1/p/documents/${v.artifact_id}/file`} target="_blank" rel="noreferrer">{staff?"Review source report":c.source}</a></details>
      </div>):<><span className="health-reading-value" aria-hidden="true">—</span><p className="small muted">{s.empty}</p></>}
     </article>;
-   })}</div>
+   })}{data.data.readings.filter(v=>v.key.startsWith("custom_")).map(v=><article className="health-reading stack" key={v.key} aria-label={v.label}><h3>{v.label}</h3><span className="health-reading-value">{v.value}</span><span className="health-verification health-verification--reviewed">{c.reviewed}</span><span className="small muted">{v.report_date?`${c.date}: ${v.report_date}${v.report_time?' · '+v.report_time:''}${v.date_reviewed?'':' · '+c.unverified}`:c.uploaded}</span><details><summary>{s.details}</summary><p className="small">{v.source_text}</p><p className="small muted">{v.filename}</p><a className="pt-link" href={staff?`/reports/${v.proposal_id}`:`/api/v1/p/documents/${v.artifact_id}/file`} target="_blank" rel="noreferrer">{c.source}</a><p className="small muted">Additional laboratory result; no automatic clinical interpretation.</p></details></article>)}</div>
    {data.data.readings.length===0?<p className="small">{c.empty}</p>:null}
-   <ReadingHistory history={data.data.history??[]} lang={lang} staff={staff} />
+   <details className="health-extra"><summary>{lang==='en'?'History & trends':lang==='hi'?'इतिहास और रुझान':'చరిత్ర & మార్పులు'}</summary><ReadingHistory history={data.data.history??[]} lang={lang} staff={staff} /></details>
   </>}
   {onUpload?<button className="btn" onClick={onUpload}>{s.upload}</button>:null}
-  <DiabetesSummary staff={staff} endpoint={staff?endpoint.replace("/priorities/","/patients/").replace("/health-readings","/diabetes-summary"):"/v1/p/diabetes-summary"} />
+  <details className="health-extra"><summary>{lang==='en'?'Monitoring summary':lang==='hi'?'निगरानी सारांश':'పర్యవేక్షణ సారాంశం'}</summary><DiabetesSummary staff={staff} endpoint={staff?endpoint.replace("/priorities/","/patients/").replace("/health-readings","/diabetes-summary"):"/v1/p/diabetes-summary"} /></details>
   <p className="small muted">{s.reportOnly} {c.warning}</p>
  </section>;
 }

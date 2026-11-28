@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import string
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -34,6 +34,7 @@ from app.enums import (
 )
 from app.models import (
     AppointmentRequest,
+    AvailabilitySlot,
     AuditEvent,
     CareTask,
     Clinic,
@@ -47,6 +48,7 @@ from app.models import (
     PatientReply,
     ProviderEvent,
     User,
+    TimelineEvent,
 )
 from app.security import Staff, current_staff, require_roles, require_staff
 from app.services import booking, guards, messaging, metrics, patients, plans, tasks, views
@@ -382,8 +384,7 @@ def list_tasks(status: Literal["open", "closed", "all"] = "open", queue: str | N
         stmt = stmt.where(CareTask.assignee_user_id == staff.user_id)
     if patient_id:
         stmt = stmt.where(CareTask.patient_id == guards.get_patient(db, staff, patient_id).id)
-    priority = case((CareTask.priority == "URGENT", 0), (CareTask.priority == "HIGH", 1), else_=2)
-    rows = db.execute(stmt.order_by(priority, CareTask.due_at).limit(limit)).all()
+    rows = db.execute(stmt.order_by(CareTask.created_at.desc(), CareTask.id.desc()).limit(limit)).all()
     names = views._names(db, {t.assignee_user_id for t, _ in rows if t.assignee_user_id})
     now = utcnow()
     return {"tasks": [{**S.task_dict(t, p, names.get(t.assignee_user_id)),
@@ -397,6 +398,17 @@ def _task_detail(db: Session, staff: Staff, task: CareTask) -> dict:
     names = views._names(db, {task.assignee_user_id} if task.assignee_user_id else set())
     out = S.task_dict(task, patient, names.get(task.assignee_user_id), with_events=True)
     out["category_label"] = CATEGORY_LABELS.get(task.category, task.category)
+    out["patient_language"] = patient.preferred_language if patient else None
+    from app.services.appointment_tasks import APPOINTMENT_TASKS, appointment_options
+    out["can_reply"] = staff.is_clinical and (task.category in CLINICAL_TASK_CATEGORIES or task.category in APPOINTMENT_TASKS)
+    clinic = clinic_of(db,staff)
+    out["appointment_options"] = [{**booking.slot_dict(slot,clinic),"id":str(a.id),"reference":a.booking_reference}
+        for a,slot in appointment_options(db,staff.clinic_id,task)]
+    out["clinician_replies"] = [{"id": str(e.id), "text": e.summary, "from": e.actor_label,
+                                 "at": S.iso(e.occurred_at)} for e in db.scalars(select(TimelineEvent).where(
+        TimelineEvent.clinic_id == staff.clinic_id, TimelineEvent.patient_id == task.patient_id,
+        TimelineEvent.event_type == "CLINICIAN_REPLY", TimelineEvent.source_type == "care_task",
+        TimelineEvent.source_id == str(task.id)).order_by(TimelineEvent.occurred_at)).all()]
     if task.source_type == "patient_reply" and task.source_id:
         reply = db.get(PatientReply, uuid.UUID(task.source_id))
         out["source"] = S.reply_dict(reply) if reply and reply.clinic_id == staff.clinic_id else None
@@ -422,6 +434,108 @@ class AssignIn(BaseModel):
 class CloseIn(BaseModel):
     outcome: str = Field(default="", max_length=60)
     note: str = Field(default="", max_length=2000)
+
+
+class ClinicalReplyIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class AppointmentTaskActionIn(BaseModel):
+    action: Literal["CANCEL", "POSTPONE", "PREPONE"]
+    appointment_id: uuid.UUID
+    slot_id: uuid.UUID | None = None
+    message: str = Field(min_length=3,max_length=1000)
+
+
+@router.post("/tasks/{task_id}/appointment-action")
+def appointment_task_action(task_id: str, body: AppointmentTaskActionIn,
+                            staff: Staff = Depends(require_roles(Role.DOCTOR,Role.NURSE)),
+                            db: Session = Depends(get_db)) -> dict:
+    from app.services.appointment_tasks import change_appointment
+    task=guards.get_task(db,staff,task_id)
+    appointment=change_appointment(db,staff,clinic_of(db,staff),task,**body.model_dump())
+    db.commit()
+    return {**_task_detail(db,staff,task),"appointment":S.appointment_dict(appointment)}
+
+
+class ConversationAssistIn(BaseModel):
+    draft: str = Field(default="", max_length=2000)
+
+
+@router.post("/tasks/{task_id}/assist")
+def assist_conversation(task_id: str, body: ConversationAssistIn,
+                        staff: Staff = Depends(require_roles(Role.DOCTOR, Role.NURSE)),
+                        db: Session = Depends(get_db)) -> dict:
+    """Read-only planning: no booking, clinical advice, priority change or patient reply."""
+    from app.ai.pipeline import understand_reply
+    from app.ai.dates import resolve_day_expression
+    from app.services.links import has_consent
+    task = guards.get_task(db, staff, task_id)
+    if task.category not in CLINICAL_TASK_CATEGORIES:
+        raise HTTPException(422, "Select a clinical conversation first.")
+    patient = guards.get_patient(db, staff, str(task.patient_id))
+    clinic = clinic_of(db, staff)
+    content = "Patient message:\n" + (task.patient_statement or "")
+    previous = db.scalar(select(TimelineEvent.summary).where(TimelineEvent.clinic_id == staff.clinic_id,
+        TimelineEvent.patient_id == patient.id, TimelineEvent.event_type == "CLINICIAN_REPLY",
+        TimelineEvent.source_id == str(task.id)).order_by(TimelineEvent.occurred_at.desc()).limit(1))
+    if previous:content += "\nLatest clinician reply:\n" + previous
+    if body.draft.strip():content += "\nClinician draft (not yet sent):\n" + body.draft.strip()
+    result = understand_reply(content, today=clinic_today(clinic), preferred_language=patient.preferred_language,
+        provider=None if has_consent(db, patient.id, ConsentPurpose.AI_PROCESSING) else "rules")
+    u = result.understanding
+    day = resolve_day_expression(u.requested_day_text, clinic_today(clinic))
+    proposed_date = u.requested_date or day.candidate
+    urgent = task.category == "URGENT_CONCERN" or "URGENT_CONCERN" in u.intents
+    clarification = day.question if not u.requested_date else None
+    slots = []
+    if not urgent and proposed_date and proposed_date >= clinic_today(clinic) and not clarification:
+        try:
+            slots = booking.list_slots(db, clinic, day=proposed_date, window=u.requested_time_window, limit=8)
+        except booking.BookingUnavailable:
+            clarification = "Availability is unavailable. Arrange the time with the clinic."
+    audit(db, clinic_id=staff.clinic_id, action="CONVERSATION_ASSIST_PROPOSED", actor=staff,
+        object_type="care_task", object_id=task.id, patient_id=patient.id,
+        detail={"provider": result.source, "booking_created": False, "urgent_cues": urgent})
+    db.commit()
+    return {"patient_id": str(patient.id), "provider": result.source, "intents": u.intents,
+        "proposed_date": proposed_date.isoformat() if proposed_date and not clarification else None,
+        "clarification": clarification, "urgent_cues": urgent,
+        "slots": [booking.slot_dict(slot, clinic) for slot in slots], "requires_confirmation": True,
+        "boundary": "Workflow suggestions only. No diagnosis, treatment advice or booking was created."}
+
+
+@router.post("/tasks/{task_id}/reply")
+def reply_to_patient(task_id: str, body: ClinicalReplyIn,
+                     staff: Staff = Depends(require_roles(Role.DOCTOR, Role.NURSE)),
+                     db: Session = Depends(get_db)) -> dict:
+    task = guards.get_task(db, staff, task_id)
+    db.refresh(task, with_for_update=True)
+    text = body.text.strip()
+    from app.services.appointment_tasks import APPOINTMENT_TASKS
+    if task.category not in CLINICAL_TASK_CATEGORIES and task.category not in APPOINTMENT_TASKS or not text:
+        raise HTTPException(422, "Enter a reply for a clinical or appointment request.")
+    # Retrying the same send must not duplicate a patient-visible reply.
+    existing = db.scalar(select(TimelineEvent).where(TimelineEvent.clinic_id == staff.clinic_id,
+        TimelineEvent.patient_id == task.patient_id, TimelineEvent.event_type == "CLINICIAN_REPLY",
+        TimelineEvent.source_id == str(task.id), TimelineEvent.summary == text))
+    if existing:
+        return _task_detail(db, staff, task)
+    if task.status not in OPEN_TASK_STATES:
+        raise HTTPException(409, "Reopen this task before sending another reply.")
+    from app.audit import timeline
+    from app.enums import ActorType, Provenance
+    timeline(db, clinic_id=staff.clinic_id, patient_id=task.patient_id,
+        event_type="CLINICIAN_REPLY", summary=text, patient_words=task.patient_statement,
+        actor_type=ActorType.USER, actor_label=staff.label, provenance=Provenance.STAFF_CONFIRMED,
+        source_type="care_task", source_id=task.id, visibility="PATIENT_AND_STAFF")
+    if task.status != TaskStatus.IN_PROGRESS:
+        tasks.transition(db, staff, task, TaskStatus.IN_PROGRESS, note="Reply sent in patient app",
+                         assignee=task.assignee_user_id or staff.user_id)
+    audit(db, clinic_id=staff.clinic_id, action="CLINICIAN_REPLY_SENT", actor=staff,
+          object_type="care_task", object_id=task.id, patient_id=task.patient_id)
+    db.commit()
+    return _task_detail(db, staff, task)
 
 
 @router.post("/tasks/{task_id}/assign")
@@ -544,7 +658,55 @@ def availability(day: date | None = Query(None, alias="date"), window: str | Non
         slots = booking.list_slots(db, clinic, day=day, window=window, limit=60)
     except booking.BookingUnavailable:
         raise HTTPException(503, "The booking service is unavailable. Arrange the time by phone.") from None
-    return {"slots": [booking.slot_dict(s, clinic) for s in slots], "source": "Seeded demo availability"}
+    source = ("Seeded demo availability" if settings.demo_mode and all(s.source == "SEEDED_DEMO" for s in slots)
+              else "Clinic availability (synthetic demo)" if settings.demo_mode else "Clinic availability")
+    return {"slots": [booking.slot_dict(s, clinic) for s in slots], "source": source}
+
+
+class AvailabilityIn(BaseModel):
+    starts_at: datetime
+    duration_minutes: int = Field(default=20, ge=5, le=180)
+    provider_label: str = Field(min_length=1, max_length=120)
+
+
+@router.post("/availability", status_code=201)
+def create_availability(body: AvailabilityIn,
+                        staff: Staff = Depends(require_roles(Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION)),
+                        db: Session = Depends(get_db)) -> dict:
+    clinic = clinic_of(db, staff)
+    from app.services.common import clinic_tz
+    if not body.provider_label.strip():
+        raise HTTPException(422, "Enter a clinician or room name.")
+    local = body.starts_at
+    if local.tzinfo is None:
+        local = local.replace(tzinfo=clinic_tz(clinic))
+        if local.utcoffset() != local.replace(fold=1).utcoffset():
+            raise HTTPException(422, "This clock time is ambiguous. Include an explicit timezone offset.")
+    start = local.astimezone(timezone.utc)
+    clinic_clock = start.astimezone(clinic_tz(clinic))
+    if not 11 * 3600 <= clinic_clock.hour * 3600 + clinic_clock.minute * 60 + clinic_clock.second <= 19 * 3600:
+        raise HTTPException(422, "Choose an appointment start time from 11 AM to 7 PM in the clinic timezone.")
+    if start <= utcnow():
+        raise HTTPException(422, "Choose a future appointment time.")
+    end = start + timedelta(minutes=body.duration_minutes)
+    # Serialize overlapping-slot checks within a clinic, including concurrent requests.
+    db.refresh(clinic, with_for_update=True)
+    label = body.provider_label.strip()
+    conflict = db.scalar(select(AvailabilitySlot.id).where(
+        AvailabilitySlot.clinic_id == staff.clinic_id,
+        func.lower(AvailabilitySlot.provider_label) == label.lower(),
+        AvailabilitySlot.status.in_(["OPEN", "BOOKED"]),
+        AvailabilitySlot.starts_at < end, AvailabilitySlot.ends_at > start))
+    if conflict:
+        raise HTTPException(409, "This clinician or room already has an overlapping slot.")
+    slot = AvailabilitySlot(clinic_id=staff.clinic_id, provider_label=label,
+        starts_at=start, ends_at=end, source="STAFF", status="OPEN")
+    db.add(slot)
+    db.flush()
+    audit(db, clinic_id=staff.clinic_id, action="AVAILABILITY_CREATED", actor=staff,
+          object_type="availability_slot", object_id=slot.id)
+    db.commit()
+    return booking.slot_dict(slot, clinic)
 
 
 @router.get("/appointment-requests")

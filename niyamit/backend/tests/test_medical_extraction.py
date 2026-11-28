@@ -33,7 +33,9 @@ def configured(monkeypatch,rows=None,measurements=None):
 def test_medical_schema_reaches_both_providers():
     assert 'measurements' in sarvam_extract_schema()['properties']
     assert 'measurements' in DOC_JSON_SCHEMA['required']
-    assert 'fasting_glucose' in DOC_JSON_SCHEMA['properties']['measurements']['items']['properties']['parameter']['enum']
+    parameter=DOC_JSON_SCHEMA['properties']['measurements']['items']['properties']['parameter']
+    assert parameter['type']=='string' and 'enum' not in parameter  # preserve additional source-named tests
+    assert 'other laboratory test' in parameter['description']
 
 
 def test_ai_handles_synonym_not_regex_and_preserves_metadata(monkeypatch):
@@ -146,6 +148,7 @@ def test_explicit_local_document_provider_never_uses_external_llm(monkeypatch):
 
 
 def test_generic_provider_glucose_is_refined_only_from_explicit_source():
+    assert candidate(parameter='GLUCOSE_FASTING').parameter=='fasting_glucose'
     assert candidate(parameter='GLUCOSE').parameter=='fasting_glucose'
     assert candidate(parameter='GLUCOSE',quote='Glucose 75 mg/dL').parameter=='blood_glucose'
     assert candidate(parameter='GLUCOSE',quote='Fasting glucose 75 mg/dL and random glucose 80 mg/dL').parameter=='blood_glucose'
