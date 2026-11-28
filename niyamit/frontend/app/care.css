@@ -37,3 +37,34 @@
 .reading-history-list { display:grid; gap:10px; list-style:none; padding:0; margin:0; max-height:500px; overflow:auto; }
 .reading-trend { margin:0; min-width:0; }
 .reading-trend svg { display:block; width:100%; height:auto; }
+
+/* Compact dashboard: readable grids, with secondary detail opened on demand. */
+.pt:has(.care-navigation) .pt-wrap { max-width:1180px; gap:12px; }
+.pt:has(.care-navigation) .card { padding:14px; gap:10px; }
+.pt .care-actions { grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.pt .care-action { min-height:64px; padding:10px; border-radius:12px; gap:6px; font-size:14px; }
+.pt .care-icon { grid-column:auto; width:26px; height:26px; border-radius:8px; }
+.pt .health-summary .health-readings { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.pt .health-summary .health-reading { grid-column:auto; grid-row:auto; border-radius:12px; padding:10px; gap:6px; align-content:start; }
+.pt .health-summary .health-reading-value { font-size:23px; }
+.pt .health-measurement { gap:3px; }
+.pt .health-measurement + .health-measurement { padding-top:6px; }
+.health-extra > summary, .patient-section > summary { cursor:pointer; font-weight:600; padding:8px 0; }
+.patient-section { min-width:0; }
+.patient-section > .card { margin-top:8px; }
+.appointment-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.appointment-card { border-top:1px solid var(--rule); padding-top:10px; }
+@media (min-width:900px) {
+ .pt .health-summary .health-readings { grid-template-columns:repeat(3,minmax(0,1fr)); }
+ .pt .health-reading--glucose .health-measurement, .pt .health-reading--kidney .health-measurement, .pt .health-reading--lipids .health-measurement { display:grid; grid-template-columns:minmax(100px,1fr) auto; column-gap:8px; }
+ .pt .health-measurement > .health-reading-value { grid-column:2; grid-row:1; font-size:21px; }
+}
+@media (max-width:620px) {
+ .pt .health-summary .health-readings { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .pt .health-summary .health-reading--glucose, .pt .health-summary .health-reading--kidney, .pt .health-summary .health-reading--lipids { grid-column:1 / -1; }
+ .pt .health-summary .health-reading--glucose, .pt .health-summary .health-reading--kidney, .pt .health-summary .health-reading--lipids { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .pt .health-reading > h3 { grid-column:1 / -1; }
+ .pt .health-measurement + .health-measurement { border-top:0; padding-top:0; }
+ .pt .care-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .pt .health-summary .health-reading-value { font-size:21px; }
+}

@@ -72,6 +72,8 @@ def _proposal_out(db: Session, staff: Staff, proposal: ExtractionProposal) -> di
     from app.services.plans import can_approve
 
     out["can_approve"] = can_approve(staff, clinic)
+    from app.services.health_readings import LABELS
+    out["measurement_options"] = [{"name": key, "label": value} for key, value in LABELS.items()]
     return out
 
 
@@ -88,6 +90,57 @@ class FieldReviewIn(BaseModel):
     action: Literal["APPROVE", "CORRECT", "REJECT"]
     value: str | None = Field(default=None, max_length=200)
     reason: str = Field(default="", max_length=300)
+    measurement_name: str | None = Field(default=None, max_length=100)
+
+
+class MissingFieldIn(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    label: str = Field(default="", max_length=80)
+    value: str = Field(min_length=1, max_length=200)
+    quote: str = Field(min_length=1, max_length=300)
+    page: int = Field(ge=1)
+    reason: str = Field(min_length=3, max_length=300)
+
+
+@router.post("/intake-proposals/{proposal_id}/find-lab-results")
+def find_lab_results(proposal_id: str, staff: Staff = Depends(require_staff), db: Session = Depends(get_db)) -> dict:
+    from app.ai.pipeline import measurement_fields
+    from app.models import ExtractedField
+    if not staff.is_clinical:
+        raise HTTPException(403, "A doctor or nurse must review additional results.")
+    proposal = guards.get_proposal(db, staff, proposal_id)
+    db.refresh(proposal, with_for_update=True)
+    if proposal.status not in (ProposalStatus.NEEDS_REVIEW, ProposalStatus.REVIEWED, ProposalStatus.APPROVED):
+        raise HTTPException(409, "Wait for extraction to finish; rejected documents cannot be scanned again.")
+    def identity(f):
+        return (f.name, f.value, (f.evidence or {}).get('parameter','') if f.name=='unmapped_measurement' else '')
+    seen={identity(f) for f in proposal.fields}
+    position=max((f.position for f in proposal.fields),default=-1)+1
+    for candidate in measurement_fields(proposal.blocks or []):
+        if identity(candidate) in seen:continue
+        seen.add(identity(candidate))
+        db.add(ExtractedField(proposal=proposal,clinic_id=proposal.clinic_id,position=position,
+            name=candidate.name,value=candidate.value,proposed_value=candidate.value,
+            extracted_value=candidate.extracted_value,status=candidate.status,
+            confidence=candidate.confidence,evidence=candidate.evidence,review_reasons=candidate.review_reasons))
+        position+=1
+    db.flush()
+    intake.finish_report_review(db,staff,proposal)
+    audit(db, clinic_id=staff.clinic_id, action="REPORT_ADDITIONAL_RESULTS_PROPOSED", actor=staff,
+        object_type="extraction_proposal", object_id=proposal.id, patient_id=proposal.patient_id)
+    db.commit()
+    return _proposal_out(db,staff,proposal)
+
+
+@router.post("/intake-proposals/{proposal_id}/fields", status_code=201)
+def add_missing_field(proposal_id: str, body: MissingFieldIn, staff: Staff = Depends(require_staff),
+                      db: Session = Depends(get_db)) -> dict:
+    proposal = guards.get_proposal(db, staff, proposal_id)
+    db.refresh(proposal, with_for_update=True)
+    db.expire(proposal, ["fields"])
+    intake.add_missing_field(db, staff, proposal, **body.model_dump())
+    db.commit()
+    return _proposal_out(db, staff, proposal)
 
 
 @router.patch("/intake-proposals/{proposal_id}/fields/{field_id}")
@@ -100,7 +153,8 @@ def review_field(proposal_id: str, field_id: str, body: FieldReviewIn, staff: St
     db.refresh(proposal, with_for_update=True)
     db.expire(proposal, ["fields"])
     db.refresh(field)
-    intake.review_field(db, staff, proposal, field, action=body.action, value=body.value, reason=body.reason.strip())
+    intake.review_field(db, staff, proposal, field, action=body.action, value=body.value,
+                        reason=body.reason.strip(), measurement_name=body.measurement_name)
     db.commit()
     return _proposal_out(db, staff, proposal)
 

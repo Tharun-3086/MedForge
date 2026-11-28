@@ -29,6 +29,9 @@ export function reminderOutcome(m: Message): { text: string; fail: boolean } {
 }
 
 export const OUTCOME_LABELS: Record<string, string> = {
+  APPOINTMENT_CANCELLED: "Appointment cancelled; patient notified",
+  APPOINTMENT_POSTPONED: "Appointment postponed; patient notified",
+  APPOINTMENT_PREPONED: "Appointment moved earlier; patient notified",
   REACHED_PATIENT: "Reached the patient",
   BOOKED: "New time booked",
   FOLLOW_UP_COMPLETED: "Follow-up completed",
@@ -84,7 +87,7 @@ export const REVIEW_REASONS: Record<string, string> = {
   HANDWRITING_UNAVAILABLE: "The handwriting model could not read this line.",
   OCR_INCOMPLETE: "Document reading is incomplete. Check every source page.",
   OCR_FALLBACK: "PaddleOCR was unavailable. Tesseract fallback needs verification.",
-  UNSUPPORTED_MEDICAL_PARAMETER: "This parameter is not supported for verified tracking. Review the original; it cannot be approved into the health dashboard.",
+  UNSUPPORTED_MEDICAL_PARAMETER: "Additional lab test: use Correct to verify its name, value and unit. A clinician-confirmed result can appear in health numbers without automatic clinical interpretation.",
   AI_MEASUREMENT_REQUIRES_REVIEW: "AI-extracted measurement: verify the result, unit and source row before confirming.",
   MEDICAL_SOURCE_NOT_GROUNDED: "The AI quote could not be matched to the OCR source. Compare the original image.",
   MEDICAL_VALUE_UNIT_NOT_GROUNDED: "The proposed value and unit do not match the quoted result clearly. Correct them from the original.",

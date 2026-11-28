@@ -9,6 +9,7 @@ MEDICAL_SCHEMA_VERSION = "diabetes-measurements-v1"
 # Canonicalize names only, never a numeric value or unit.
 PARAMETER_ALIASES = {
     'glucose':'blood_glucose','bloodsugar':'blood_glucose','plasmaglucose':'blood_glucose',
+    'glucosefasting':'fasting_glucose','glucoserandom':'random_glucose','glucosepostprandial':'postmeal_glucose',
     'fastingplasmaglucose':'fasting_glucose','fastingbloodglucose':'fasting_glucose','fastingbloodsugar':'fasting_glucose','fastingglucose':'fasting_glucose','fbs':'fasting_glucose','fbg':'fasting_glucose',
     'postprandialplasmaglucose':'postmeal_glucose','postprandialbloodglucose':'postmeal_glucose','postprandialbloodsugar':'postmeal_glucose','postmealbloodglucose':'postmeal_glucose','ppbs':'postmeal_glucose',
     'randombloodglucose':'random_glucose','randomplasmaglucose':'random_glucose','randombloodsugar':'random_glucose','rbs':'random_glucose',
@@ -55,7 +56,7 @@ class MedicalMeasurement(BaseModel):
 MEASUREMENT_JSON_SCHEMA = {
     "type":"object", "additionalProperties":False,
     "properties": {
-        "parameter":{"type":"string","enum":list(LABELS),"description":"Return the exact internal enum code, not the test label. Never confuse a result with a reference limit or medication dose."},
+        "parameter":{"type":"string","description":"Use an internal code for a known measurement; for any other laboratory test return its exact test name. Include additional laboratory results, not only diabetes tests. Never confuse a result with a reference limit or medication dose."},
         "value":{"type":"string","description":"Exact result number (or BP pair), excluding unit. Preserve comparators; never calculate or guess."},
         "unit":{"type":"string","description":"Exact unit written beside this result. Empty if missing; never infer or repair."},
         "reference_range":{"type":"string","description":"Exact laboratory reference range for this result, or empty. This is not a personalized treatment target."},

@@ -93,6 +93,7 @@ export default function PatientPage() {
           {patient.opted_out ? <Pill tone="fail">Opted out of reminders</Pill> : null}
         </span>}
         actions={<>
+          <Link className="btn" href={`/schedule?patient=${id}`}>Book appointment</Link>
           {data.can_remove_test_patient?<button className="btn btn--danger" onClick={()=>{setRemoveName("");setRemoveOpen(true);}}>Remove test patient</button>:null}
           <Link className="btn btn--quiet" href={`/patients/${id}/capsule`}>Visit capsule</Link>
           {!patient.opted_out ? <button className="btn btn--quiet" onClick={remind}>Send reminder</button> : null}
@@ -199,7 +200,7 @@ export default function PatientPage() {
 
           <section className="panel">
             <h2 style={{ fontSize: 19, marginBottom: 10 }}>Appointments</h2>
-            {data.appointments.length === 0 ? <p className="muted">None booked. <Link href="/schedule">Book from the schedule</Link></p> : (
+            {data.appointments.length === 0 ? <p className="muted">None booked. <Link href={`/schedule?patient=${id}`}>Book from the schedule</Link></p> : (
               <div className="stack" style={{ gap: 10 }}>
                 {data.appointments.map((a) => (
                   <div key={a.id} className="spread">

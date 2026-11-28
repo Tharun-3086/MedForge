@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PageHead } from "@/components/staff-shell";
 import { Empty, ErrorNote, Loading, Pill, useAction } from "@/components/ui";
@@ -15,25 +15,39 @@ const REQUEST_TONE: Record<string, "wait" | "info" | "fail" | "done" | "neutral"
 };
 
 export default function SchedulePage() {
-  const { counts, refreshCounts } = useStaff();
+  const { me, counts, refreshCounts } = useStaff();
   const requests = useApi<{ requests: AppointmentRequest[] }>("/v1/appointment-requests?status=open");
   const { data: pts } = useApi<{ patients: PatientBrief[] }>("/v1/patients?limit=500");
   const [day, setDay] = useState<string>("");
-  const [windowName, setWindowName] = useState("");
   const query = new URLSearchParams();
   if (day) query.set("date", day);
-  if (windowName) query.set("window", windowName);
   const slots = useApi<{ slots: Slot[]; source: string }>(`/v1/availability?${query}`);
   const { busy, run } = useAction();
   const [patientId, setPatientId] = useState("");
+  const [timeChoice, setTimeChoice] = useState("");
+  const [provider, setProvider] = useState(me.user.name);
+  const [moveContext,setMoveContext]=useState<{task:string;appointment:string;action:"POSTPONE"|"PREPONE"}|null>(null);
+  const [patientMessage,setPatientMessage]=useState("");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const patient = params.get("patient");
+    if (patient) setPatientId(patient);
+    if (params.get("date")) setDay(params.get("date")!);
+    if(params.get("task")&&params.get("appointment")&&["POSTPONE","PREPONE"].includes(params.get("move")??""))setMoveContext({task:params.get("task")!,appointment:params.get("appointment")!,action:params.get("move") as "POSTPONE"|"PREPONE"});
+  }, []);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [slotId, setSlotId] = useState<string | null>(null);
   const [dayWords, setDayWords] = useState("");
   const [offered, setOffered] = useState<{ slots: Slot[]; question: string | null; request: AppointmentRequest } | null>(null);
 
+  function withinClinicHours(slot: Slot) {
+    const clock = new Intl.DateTimeFormat("en-GB", { timeZone: me.clinic.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(slot.starts_at));
+    return clock >= "11:00" && clock <= "19:00";
+  }
+
   const byDay = useMemo(() => {
     const groups = new Map<string, Slot[]>();
-    (slots.data?.slots ?? []).forEach((s) => groups.set(s.date, [...(groups.get(s.date) ?? []), s]));
+    (slots.data?.slots ?? []).filter(withinClinicHours).forEach((s) => groups.set(s.date, [...(groups.get(s.date) ?? []), s]));
     return Array.from(groups.entries());
   }, [slots.data]);
 
@@ -42,18 +56,43 @@ export default function SchedulePage() {
     setPatientId(r.patient?.id ?? "");
     setDay(r.requested_date ?? "");
     setSlotId(null);
+    setTimeChoice("");
+    setOffered(null);
     document.getElementById("book")?.scrollIntoView({ behavior: "smooth" });
   }
 
   async function book() {
-    if (!patientId || !slotId) return;
-    const result = await run(() => api<{ appointment: { reference: string } }>("/v1/appointments", {
-      body: { patient_id: patientId, slot_id: slotId, request_id: requestId, client_key: clientKey() },
-    }), (r) => `Booked. Reference ${r.appointment.reference}. The patient gets a confirmation message.`);
+    if (!patientId || (!slotId && (!day || !timeChoice || !provider.trim()))) return;
+    const result = await run(async () => {
+      let chosenId = slotId;
+      if (!chosenId && timeChoice.startsWith("clock:")) {
+        const clock = timeChoice.slice(6);
+        chosenId = (slots.data?.slots ?? []).find(slot => slot.date === day &&
+          slot.provider.trim().toLowerCase() === provider.trim().toLowerCase() &&
+          new Intl.DateTimeFormat("en-GB", { timeZone: me.clinic.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(slot.starts_at)) === clock)?.id ?? null;
+      }
+      if (!chosenId) {
+        const created = await api<Slot>("/v1/availability", {
+          body: { starts_at: `${day}T${timeChoice.replace("clock:", "")}:00`, provider_label: provider.trim() },
+        });
+        chosenId = created.id;
+        setSlotId(chosenId);
+        setTimeChoice(`slot:${chosenId}`);
+      }
+      if(moveContext){
+        const message=patientMessage.trim().length>=3?patientMessage.trim():`Your appointment has been ${moveContext.action==="POSTPONE"?"postponed":"moved earlier"}. Please check the confirmed date and time in your app.`;
+        return api<{appointment:{reference:string}}>(`/v1/tasks/${moveContext.task}/appointment-action`,{body:{action:moveContext.action,appointment_id:moveContext.appointment,slot_id:chosenId,message}});
+      }
+      return api<{ appointment: { reference: string } }>("/v1/appointments", {
+        body: { patient_id: patientId, slot_id: chosenId, request_id: requestId, client_key: clientKey() },
+      });
+    }, (r) => `Booked. Reference ${r.appointment.reference}. The patient gets a confirmation message.`);
     if (result) {
       setSlotId(null);
+      setTimeChoice("");
       setRequestId(null);
       setOffered(null);
+      if(moveContext){setMoveContext(null);setPatientMessage("");window.history.replaceState(null,"",`/schedule?patient=${patientId}`);}
       await Promise.all([requests.reload(), slots.reload()]);
       refreshCounts();
     } else {
@@ -72,14 +111,20 @@ export default function SchedulePage() {
     }
   }
 
-  const choosable = offered ? offered.slots : null;
+  const choosable = offered ? offered.slots.filter(withinClinicHours) : null;
+
+  function selectSlot(id: string) {
+    const selected = [...(slots.data?.slots ?? []), ...(offered?.slots ?? [])].find(slot => slot.id === id);
+    setSlotId(id); setTimeChoice(`slot:${id}`);
+    if (selected) setDay(selected.date);
+  }
 
   return (
     <>
       <PageHead title="Schedule"
         lede={<>Only times from the clinic&rsquo;s availability are offered, and nothing is confirmed until the booking is saved with a reference. {counts?.waiting_on_patient_choice ? `${counts.waiting_on_patient_choice} patient${counts.waiting_on_patient_choice === 1 ? " is" : "s are"} choosing a time in the app.` : ""}</>} />
 
-      <section className="panel" style={{ marginBottom: 20 }}>
+      {!moveContext?<section className="panel" style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 19, marginBottom: 10 }}>Requests waiting for a time</h2>
         <ErrorNote error={requests.error} />
         {requests.loading && !requests.data ? <Loading /> : null}
@@ -107,45 +152,59 @@ export default function SchedulePage() {
             </table>
           </div>
         ) : null}
-      </section>
+      </section>:null}
 
       <section id="book" className="panel stack">
         <h2 style={{ fontSize: 19 }}>Book a time</h2>
+        {moveContext?<p className="notice">{moveContext.action==="POSTPONE"?"Postpone: select a later appointment slot.":"Prepone: select an earlier appointment slot."} The original stays reserved until the replacement booking succeeds.</p>:null}
         <div className="form-grid">
           <label className="field"><span>Patient</span>
-            <select value={patientId} onChange={(e) => { setPatientId(e.target.value); setRequestId(null); setOffered(null); }}>
+            <select disabled={busy||Boolean(moveContext)} value={patientId} onChange={(e) => { setPatientId(e.target.value); setRequestId(null); setOffered(null); }}>
               <option value="">Choose a patient</option>
               {pts?.patients.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.external_ref})</option>)}
             </select>
           </label>
           <label className="field"><span>Day</span>
-            <input type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+            <input disabled={busy} type="date" value={day} onChange={(e) => { setDay(e.target.value); setSlotId(null); setTimeChoice(""); setOffered(null); }} />
           </label>
-          <label className="field"><span>Time of day</span>
-            <select value={windowName} onChange={(e) => setWindowName(e.target.value)}>
-              <option value="">Any</option><option value="MORNING">Morning</option><option value="AFTERNOON">Afternoon</option><option value="EVENING">Evening</option>
+          <label className="field"><span>Time slot</span>
+            <select disabled={busy || !day} value={timeChoice} onChange={e => {
+              setTimeChoice(e.target.value);
+              if(e.target.value.startsWith("slot:")) selectSlot(e.target.value.slice(5));
+              else { setSlotId(null); setOffered(null); }
+            }}>
+              <option value="">{day ? "Choose a time" : "Choose the day first"}</option>
+              <optgroup label="Available clinic slots">{(slots.data?.slots ?? []).filter(slot=>slot.date===day && withinClinicHours(slot)).map(slot=><option key={slot.id} value={`slot:${slot.id}`}>{slot.label.split(", ").slice(-1)[0]} · {slot.provider}</option>)}</optgroup>
+              <optgroup label="Set a clinic time">{Array.from({length:25},(_,i)=>{
+                const hour=11+Math.floor(i/3),minute=(i%3)*20;
+                const clock=`${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
+                return <option key={clock} value={`clock:${clock}`}>{hour%12||12}:{String(minute).padStart(2,"0")} {hour<12?"AM":"PM"}</option>;
+              })}</optgroup>
             </select>
           </label>
+          <label className="field"><span>Clinician or room</span><input disabled={busy || Boolean(slotId)} maxLength={120} value={slotId ? ([...(slots.data?.slots ?? []),...(offered?.slots ?? [])].find(slot=>slot.id===slotId)?.provider ?? provider) : provider} onChange={e=>setProvider(e.target.value)} /></label>
         </div>
-        <div className="field" style={{ maxWidth: 640 }}>
+        <p className="small muted">Start times: 11 AM–7 PM ({me.clinic.timezone}). New appointments use a standard 20-minute slot.</p>
+        {moveContext?<label className="field"><span>Extra note to patient (optional)</span><textarea maxLength={1000} placeholder="The confirmed appointment update is sent automatically. Add a note if needed." value={patientMessage} onChange={e=>setPatientMessage(e.target.value)}/></label>:null}
+        {!moveContext?<div className="field" style={{ maxWidth: 640 }}>
           <span>Or type what the patient said</span>
           <form className="row" style={{ flexWrap: "nowrap" }} onSubmit={(e) => { e.preventDefault(); void ask(); }}>
             <input type="text" placeholder="Saturday morning, repu, 12 tareekh" value={dayWords} onChange={(e) => setDayWords(e.target.value)} style={{ flex: 1, width: "auto", minWidth: 0 }} />
             <button type="submit" className="btn btn--quiet" disabled={busy || !patientId || !dayWords.trim()}>Find times</button>
           </form>
           <small>Understood the same way as a patient&rsquo;s message, in English, Hindi or Telugu mixed with English.</small>
-        </div>
+        </div>:null}
         {requestId ? <p className="small">Booking for an open request. It closes when the booking is saved.</p> : null}
         {offered?.question ? <p className="notice notice--warn">{offered.question}</p> : null}
         {offered && offered.request.status === "HANDED_TO_STAFF" ? <p className="notice notice--fail">The booking service is unavailable or has no free times. A task was created; arrange the time by phone.</p> : null}
         <ErrorNote error={slots.error} />
         {choosable ? (
-          <SlotGrid groups={[["Offered times", choosable]]} selected={slotId} onSelect={setSlotId} />
+          <SlotGrid groups={[["Offered times", choosable]]} selected={slotId} onSelect={selectSlot} />
         ) : byDay.length ? (
-          <SlotGrid groups={byDay.map(([d, s]) => [fmtLongDay(d), s])} selected={slotId} onSelect={setSlotId} />
-        ) : slots.data ? <p className="muted">No open times for this choice.</p> : null}
+          <SlotGrid groups={byDay.map(([d, s]) => [fmtLongDay(d), s])} selected={slotId} onSelect={selectSlot} />
+        ) : slots.data ? <p className="muted">{timeChoice.startsWith("clock:")?"A new 20-minute slot will be created for this time when you confirm, subject to availability.":"No existing open slots for this day. Choose a clinic time above."}</p> : null}
         <div className="row">
-          <button className="btn" disabled={busy || !patientId || !slotId} onClick={book}>Book and send confirmation</button>
+          <button className="btn" disabled={busy || !patientId || (!slotId && (!day || !timeChoice || !provider.trim()))} onClick={book}>{moveContext?`Confirm ${moveContext.action==="POSTPONE"?"postponement":"earlier appointment"} and notify patient`:"Book and send confirmation"}</button>
           <span className="small muted">{slots.data?.source}</span>
         </div>
       </section>

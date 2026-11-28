@@ -121,7 +121,7 @@ def artifact_dict(a: SourceArtifact) -> dict[str, Any]:
 
 
 def field_dict(f: ExtractedField) -> dict[str, Any]:
-    return {"id": str(f.id), "name": f.name, "label": FIELD_LABELS.get(f.name, f.name), "value": f.value,
+    return {"id": str(f.id), "name": f.name, "label": (f.evidence or {}).get("manual_label") or FIELD_LABELS.get(f.name, f.name), "value": f.value,
             "proposed_value": f.proposed_value, "extracted_value": f.extracted_value, "status": f.status, "confidence": f.confidence,
             "evidence": f.evidence, "review_reasons": f.review_reasons, "reviewed_at": iso(f.reviewed_at),
             "provenance": "STAFF_CONFIRMED" if f.status == "APPROVED" else "AI_PROPOSED"}

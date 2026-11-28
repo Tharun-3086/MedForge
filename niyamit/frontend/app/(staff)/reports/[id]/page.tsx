@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { EvidenceViewer } from "@/components/evidence-viewer";
+import { MissingReportField } from "@/components/missing-report-field";
 import { FIELD_TO_ITEM, PROPOSAL_STATUS, REVIEW_REASONS, OCR_VERIFICATION_REASONS } from "@/components/outcomes";
 import { PageHead } from "@/components/staff-shell";
 import { ErrorNote, Loading, Pill, Provenance, useAction } from "@/components/ui";
@@ -21,12 +22,13 @@ function showValue(f: Field, value = f.value): string {
 
 export default function ReviewPage() {
   const { id } = useParams<{ id: string }>();
-  const { refreshCounts } = useStaff();
+  const { me, refreshCounts } = useStaff();
   const { data, error, loading, reload, setData } = useApi<Proposal>(`/v1/intake-proposals/${id}`);
   const { busy, run } = useAction();
   const [active, setActive] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [value, setValue] = useState("");
+  const [measurementName, setMeasurementName] = useState("");
   const [reason, setReason] = useState("");
   const [chosen, setChosen] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
@@ -50,7 +52,8 @@ export default function ReviewPage() {
   async function review(f: Field, action: "APPROVE" | "CORRECT" | "REJECT") {
     const result = await run(
       () => api<Proposal>(`/v1/intake-proposals/${id}/fields/${f.id}`, {
-        method: "PATCH", body: { action, value: action === "CORRECT" ? value : null, reason },
+        method: "PATCH", body: { action, value: action === "CORRECT" ? value : null, reason,
+          measurement_name: ["unmapped_measurement","custom_measurement"].includes(f.name) ? measurementName : null },
       }),
       action === "APPROVE" ? `${f.label}: confirmed.` : action === "CORRECT" ? `${f.label}: corrected and confirmed.` : `${f.label}: rejected.`,
     );
@@ -87,6 +90,8 @@ export default function ReviewPage() {
         actions={<Pill tone={tone}>{statusLabel}</Pill>}
       />
       {p.status === "EXTRACTION_PENDING" ? <p className="notice" aria-live="polite">Reading the document. This page updates by itself.</p> : null}
+      {["DOCTOR", "NURSE"].includes(me.user.role) && ["NEEDS_REVIEW", "REVIEWED", "APPROVED"].includes(p.status) ? <MissingReportField proposal={p} onSaved={updated => { setData(updated); refreshCounts(); }} /> : null}
+      {["DOCTOR", "NURSE"].includes(me.user.role) && ["NEEDS_REVIEW", "REVIEWED", "APPROVED"].includes(p.status) ? <button className="btn btn--quiet" style={{marginBottom:12}} disabled={busy} onClick={async()=>{const result=await run(()=>api<Proposal>(`/v1/intake-proposals/${id}/find-lab-results`,{method:"POST"}),"Additional lab rows checked. New candidates require clinic verification.");if(result)setData(result);}}>Find additional lab results in this report</button> : null}
       {p.status === "EXTRACTION_FAILED" ? (
         <div className="notice notice--fail stack" style={{ marginBottom: 16 }}>
           <span>The document could not be read ({p.error_code || "unknown error"}). {p.notes.join(" ")}</span>
@@ -139,6 +144,7 @@ export default function ReviewPage() {
               {(open || p.status === "APPROVED") && f.status !== "APPROVED" && f.status !== "REJECTED" ? (
                 editing === f.id ? (
                   <div className="stack" onClick={(e) => e.stopPropagation()}>
+                    {["unmapped_measurement","custom_measurement"].includes(f.name) ? <label className="field"><span>Exact lab test name (checked against original)</span><input value={measurementName} onChange={e=>setMeasurementName(e.target.value)} list="known-measurements" placeholder="For example: Fasting glucose or Serum uric acid"/><datalist id="known-measurements">{p.measurement_options?.map(option=><option key={option.name} value={option.label}/>)}</datalist></label> : null}
                     {f.name === "document_type" ? (
                       <select value={value} onChange={(e) => setValue(e.target.value)}>
                         {["PRESCRIPTION", "LAB_REPORT", "DISCHARGE_SUMMARY", "REGISTER", "OTHER"].map((v) => <option key={v} value={v}>{v.toLowerCase().replace("_", " ")}</option>)}
@@ -156,8 +162,8 @@ export default function ReviewPage() {
                 ) : (
                   <div className="row" onClick={(e) => e.stopPropagation()}>
                     {f.review_reasons.some(r=>OCR_VERIFICATION_REASONS.includes(r)) ? <label className="field"><span>Verification note (required)</span><input value={active===f.id?reason:""} onFocus={()=>{if(active!==f.id){setActive(f.id);setReason("");}}} onChange={e=>{setActive(f.id);setReason(e.target.value);}} placeholder="What you checked against the original"/></label> : null}
-                    <button className="btn btn--small" disabled={busy || !f.value || (f.status==="NEEDS_REVIEW" && f.review_reasons.some(r=>OCR_VERIFICATION_REASONS.includes(r)) && (active!==f.id || !reason.trim()))} onClick={() => review(f, "APPROVE")}>Matches the original</button>
-                    <button className="btn btn--quiet btn--small" disabled={busy} onClick={() => { setEditing(f.id); setValue(f.value ?? ""); setReason(""); }}>Correct</button>
+                    {f.name!=="unmapped_measurement" ? <button className="btn btn--small" disabled={busy || !f.value || f.review_reasons.includes("UNSUPPORTED_MEASUREMENT_UNIT") || (f.status==="NEEDS_REVIEW" && f.review_reasons.some(r=>OCR_VERIFICATION_REASONS.includes(r)) && (active!==f.id || !reason.trim()))} onClick={() => review(f, "APPROVE")}>Matches the original</button> : <span className="small">Verify the test name, value and unit using Correct below.</span>}
+                    <button className="btn btn--quiet btn--small" disabled={busy} onClick={() => { setEditing(f.id); setValue(f.value ?? ""); setMeasurementName(f.evidence.manual_label || f.evidence.parameter || ""); setReason(""); }}>Correct</button>
                     <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => review(f, "REJECT")}>Reject</button>
                   </div>
                 )

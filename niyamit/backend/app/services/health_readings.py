@@ -122,6 +122,18 @@ def valid_value(key,value):
     parsed=extract([{'text':LABELS[key].replace(' (type unspecified)','')+': '+value}]).get(key)
     return bool(parsed and parsed[0]==value)
 
+def custom_reading(label, value):
+    """Validate transcription structure only, without interpreting an unfamiliar test."""
+    label=re.sub(r'\s+',' ',str(label or '')).strip()
+    value=str(value or '').strip()
+    match=re.fullmatch(r'([<>]=?\s*)?-?\d{1,8}(?:\.\d{1,6})?\s+([^\r\n]{1,50})',value)
+    if not label or len(label)>100 or not match:return None
+    unit=match.group(2).strip()
+    if not re.search(r'[a-zA-Zµμ%]',unit) or re.search(r'[<>;{}]',unit):return None
+    key='custom_'+hashlib.sha256((label.casefold()+'\0'+unit).encode()).hexdigest()[:20]
+    return key,label,unit
+
+
 def latest(db,patient_id,clinic_id):
     rows=db.execute(select(SourceArtifact,ExtractionProposal).join(ExtractionProposal,ExtractionProposal.artifact_id==SourceArtifact.id)
         .where(SourceArtifact.patient_id==patient_id,SourceArtifact.clinic_id==clinic_id,
@@ -132,6 +144,9 @@ def latest(db,patient_id,clinic_id):
     for artifact,proposal in rows:
         processing=processing or proposal.status=='EXTRACTION_PENDING'
         if proposal.status in ('REJECTED','EXTRACTION_PENDING','EXTRACTION_FAILED'):continue
+        for f in proposal.fields:
+            if f.name=='unmapped_measurement' and f.status not in ('APPROVED','REJECTED'):
+                pending.add((str(artifact.id),str(f.id)))
         fields={f.name:f for f in proposal.fields}
         dates=[f for f in proposal.fields if f.name=='document_date' and f.status!='REJECTED']
         approved_dates=[f for f in dates if f.status=='APPROVED']
@@ -168,6 +183,24 @@ def latest(db,patient_id,clinic_id):
                     'clinic_reviewed':bool(field and field.status=='APPROVED'),'filename':artifact.filename,
                     'artifact_id':str(artifact.id),'source_text':field.extracted_value if field else parsed[key][1], 'proposal_id':str(proposal.id),
                     'source_metadata':{k:v for k,v in (field.evidence or {}).items() if k in ('page','bboxes','engines','extraction_method','extraction_provider','extraction_schema','unit','reference_range','test_date')} if field else {}}
+            history.append(record)
+            if key not in ranks or rank>ranks[key]:ranks[key]=rank;readings[key]=record
+        # Additional tests enter the dashboard only after a clinician verifies
+        # their name, result and unit. Different units remain separate series.
+        custom={}
+        for field in proposal.fields:
+            if field.name!='custom_measurement' or field.status!='APPROVED':continue
+            spec=custom_reading((field.evidence or {}).get('manual_label') or (field.evidence or {}).get('parameter'),field.value)
+            if spec:custom.setdefault(spec[0],[]).append((field,spec))
+        for key, entries in custom.items():
+            if len({f.value for f,_ in entries})>1:
+                pending.add((str(artifact.id),key));continue
+            field,spec=entries[0]
+            record={'key':key,'label':spec[1],'value':field.value,'report_date':str(report_date) if report_date else None,
+                'date_reviewed':bool(doc and doc.status=='APPROVED'),'report_time':report_time,
+                'uploaded_at':artifact.created_at.isoformat(),'clinic_reviewed':True,'filename':artifact.filename,
+                'artifact_id':str(artifact.id),'source_text':field.extracted_value,'proposal_id':str(proposal.id),
+                'source_metadata':{**(field.evidence or {}),'unit':spec[2]},'additional_lab_result':True}
             history.append(record)
             if key not in ranks or rank>ranks[key]:ranks[key]=rank;readings[key]=record
     history.sort(key=lambda r:(r['report_date'] or '',r['report_time'] or '',r['uploaded_at'],r['artifact_id']),reverse=True)
